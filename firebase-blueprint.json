@@ -1,0 +1,46 @@
+
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "nome": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string" },
+        "ativo": { "type": "boolean" }
+      },
+      "required": ["uid", "nome", "email", "role", "ativo"]
+    },
+    "Certame": {
+      "title": "Certame",
+      "type": "object",
+      "properties": {
+        "orgao": { "type": "string" },
+        "modalidade": { "type": "string" },
+        "numeroAno": { "type": "string" },
+        "status": { "type": "string" },
+        "itens": { "type": "array", "items": { "$ref": "#/entities/ItemPrecificacao" } },
+        "ajustesLotes": { "type": "object" }
+      },
+      "required": ["orgao", "modalidade", "numeroAno", "status"]
+    },
+    "ItemPrecificacao": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemNumero": { "type": "number" },
+        "loteNumero": { "type": "number" },
+        "descricao": { "type": "string" },
+        "qtd": { "type": "number" },
+        "precoFinalVendidoReal": { "type": "number" },
+        "precoAnteriorAjusteLote": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/profiles/{uid}": { "schema": "#/entities/Profile", "description": "User profiles" },
+    "/certames/{certameId}": { "schema": "#/entities/Certame", "description": "Bidding processes" }
+  }
+}
