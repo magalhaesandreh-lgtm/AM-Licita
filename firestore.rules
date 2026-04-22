@@ -3,6 +3,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Global Settings - required for branding even when not logged in
+    match /settings/global {
+      allow read: if true;
+      allow write: if isAuthenticated() && (
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin' ||
+        request.auth.token.email == "magalhaesandreh@gmail.com"
+      );
+    }
+
     // ===============================================================
     // Helper Functions
     // ===============================================================
@@ -33,12 +42,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
-    // Global Settings - required for branding even when not logged in
-    match /settings/global {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
     // Default Access for main collections
     // We use a wildcard and ensure users are at least signed in.
     match /{collection}/{docId} {

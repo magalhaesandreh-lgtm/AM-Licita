@@ -83,19 +83,26 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     // Set initial loading state
     setUserAuthState(prevState => ({ ...prevState, isUserLoading: true, userError: null }));
     
+    let profileUnsubscribe: (() => void) | null = null;
+
     const authUnsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
+        // Cleanup previous profile listener if it exists
+        if (profileUnsubscribe) {
+          profileUnsubscribe();
+          profileUnsubscribe = null;
+        }
+
         if (firebaseUser) {
             const profileRef = doc(firestore, 'profiles', firebaseUser.uid);
-            const profileUnsubscribe = onSnapshot(profileRef, 
+            profileUnsubscribe = onSnapshot(profileRef, 
                 async (docSnap) => { // Make async to handle profile creation
                     if (docSnap.exists()) {
                         const profileData = docSnap.data() as Profile;
                         setUserAuthState({ user: firebaseUser, profile: profileData, isUserLoading: false, userError: null });
                     } else {
-                        // Profile DOES NOT EXIST. This can happen for legacy users or if creation failed.
-                        // We create it on the fly to ensure the app can proceed.
+                        // Profile DOES NOT EXIST.
                         try {
                             const userName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Novo Usuário';
                             const newProfileData: Omit<Profile, 'uid'> = {
@@ -103,15 +110,12 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                                 nome: userName,
                                 displayName: userName,
                                 email: firebaseUser.email!,
-                                role: 'user', // Default to 'user', can be changed by an admin
+                                role: 'user',
                                 ativo: true,
                                 createdAt: serverTimestamp(),
                                 updatedAt: serverTimestamp(),
                             };
                             await setDoc(profileRef, newProfileData);
-                            // After creation, the onSnapshot listener will be re-triggered with the new data,
-                            // automatically updating the state to `docSnap.exists() === true`.
-                            // We don't need to set state here.
                         } catch (creationError) {
                             console.error("FirebaseProvider: Failed to create user profile on-the-fly:", creationError);
                             setUserAuthState({ user: firebaseUser, profile: null, isUserLoading: false, userError: creationError as Error });
@@ -119,12 +123,13 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                     }
                 },
                 (error) => {
-                    console.error("FirebaseProvider: Profile onSnapshot error:", error);
-                    setUserAuthState({ user: firebaseUser, profile: null, isUserLoading: false, userError: error });
+                    // Only log error if we still have a user (prevents error noise on logout)
+                    if (auth.currentUser) {
+                        console.error("FirebaseProvider: Profile onSnapshot error:", error);
+                        setUserAuthState({ user: firebaseUser, profile: null, isUserLoading: false, userError: error });
+                    }
                 }
             );
-
-            return () => profileUnsubscribe();
         } else {
           // No user is logged in
           setUserAuthState({ user: null, profile: null, isUserLoading: false, userError: null });
@@ -135,7 +140,11 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
         setUserAuthState({ user: null, profile: null, isUserLoading: false, userError: error });
       }
     );
-    return () => authUnsubscribe();
+
+    return () => {
+      authUnsubscribe();
+      if (profileUnsubscribe) profileUnsubscribe();
+    };
   }, [auth, firestore]);
 
   const contextValue = useMemo((): FirebaseContextState => {

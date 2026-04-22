@@ -24,7 +24,7 @@ export function useBranding() {
     return doc(firestore, 'settings', 'global');
   }, [firestore]);
 
-  const { data: settingsData, isLoading: isSettingsLoading } = useDoc<BrandingState>(settingsDocRef);
+  const { data: settingsData, isLoading: isSettingsLoading } = useDoc<BrandingState>(settingsDocRef, { silent: true });
   
   const branding = settingsData ? {
     appName: settingsData.appName || defaultBranding.appName,

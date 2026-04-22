@@ -38,8 +38,13 @@ export interface UseDocResult<T> {
  * The Firestore DocumentReference. Waits if null/undefined.
  * @returns {UseDocResult<T>} Object with data, isLoading, error.
  */
+export interface UseDocOptions {
+  silent?: boolean;
+}
+
 export function useDoc<T = any>(
   memoizedDocRef: DocumentReference<DocumentData> | null | undefined,
+  options: UseDocOptions = {}
 ): UseDocResult<T> {
   type StateDataType = WithId<T> | null;
 
@@ -57,7 +62,6 @@ export function useDoc<T = any>(
 
     setIsLoading(true);
     setError(null);
-    // Optional: setData(null); // Clear previous data instantly
 
     const unsubscribe = onSnapshot(
       memoizedDocRef,
@@ -65,10 +69,9 @@ export function useDoc<T = any>(
         if (snapshot.exists()) {
           setData({ ...(snapshot.data() as T), id: snapshot.id });
         } else {
-          // Document does not exist
           setData(null);
         }
-        setError(null); // Clear any previous error on successful snapshot (even if doc doesn't exist)
+        setError(null);
         setIsLoading(false);
       },
       (error: FirestoreError) => {
@@ -81,13 +84,15 @@ export function useDoc<T = any>(
         setData(null)
         setIsLoading(false)
 
-        // trigger global error propagation
-        errorEmitter.emit('permission-error', contextualError);
+        // trigger global error propagation if not silent
+        if (!options.silent) {
+          errorEmitter.emit('permission-error', contextualError);
+        }
       }
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
+  }, [memoizedDocRef, options.silent]);
 
   return { data, isLoading, error };
 }
