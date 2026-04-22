@@ -19,7 +19,7 @@ import { useMemo } from 'react';
 import { ThemeToggle } from '../theme-toggle';
 import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
-import { UserAvatarAm } from '../user-avatar-am';
+import { UserProfileAvatar } from '../user-profile-avatar';
 import { NotificationDropdown } from './notification-dropdown';
 
 export function Header() {
@@ -77,11 +77,7 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback>
-                  <UserAvatarAm />
-                </AvatarFallback>
-              </Avatar>
+              <UserProfileAvatar />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

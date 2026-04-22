@@ -5,6 +5,10 @@ import { doc } from 'firebase/firestore';
 
 export interface BrandingState {
   appName: string;
+  logoUrl?: string;
+  logoCompactUrl?: string;
+  loginLogoUrl?: string;
+  faviconUrl?: string;
 }
 
 const defaultBranding: BrandingState = {
@@ -13,21 +17,24 @@ const defaultBranding: BrandingState = {
 
 export function useBranding() {
   const firestore = useFirestore();
-  const { user, isUserLoading } = useUser();
 
   const settingsDocRef = useMemoFirebase(() => {
-    // Only create the doc ref if the user is loaded and authenticated
-    if (!firestore || isUserLoading || !user) return null;
+    // Branding should load without requiring the user to be logged in
+    if (!firestore) return null;
     return doc(firestore, 'settings', 'global');
-  }, [firestore, isUserLoading, user]);
+  }, [firestore]);
 
-  const { data: settingsData, isLoading: isSettingsLoading } = useDoc<{ appName: string }>(settingsDocRef);
+  const { data: settingsData, isLoading: isSettingsLoading } = useDoc<BrandingState>(settingsDocRef);
   
   const branding = settingsData ? {
     appName: settingsData.appName || defaultBranding.appName,
+    logoUrl: settingsData.logoUrl,
+    logoCompactUrl: settingsData.logoCompactUrl,
+    loginLogoUrl: settingsData.loginLogoUrl,
+    faviconUrl: settingsData.faviconUrl,
   } : defaultBranding;
 
-  return { ...branding, isLoading: isUserLoading || isSettingsLoading };
+  return { ...branding, isLoading: isSettingsLoading };
 }
 
     

@@ -32,8 +32,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, limit, updateDoc } from 'firebase/firestore';
 import { useBranding } from '@/hooks/use-branding';
-import { LogoAm } from '@/components/logo-am';
-
+import { BrandLogo } from '@/components/brand-logo';
 
 const loginSchema = z.object({
   email: z
@@ -157,7 +156,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="items-center text-center">
-            <LogoAm className="h-24 w-24 mb-4" />
+            <BrandLogo className="h-24 w-24 mb-4" variant="login" />
           <CardTitle className="text-2xl font-bold text-primary">{getTitle()}</CardTitle>
           <CardDescription>{getDescription()}</CardDescription>
         </CardHeader>

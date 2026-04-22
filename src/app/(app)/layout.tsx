@@ -25,8 +25,7 @@ import {
 } from '@/components/ui/card';
 import { useBranding } from '@/hooks/use-branding';
 import { useAuth, useUser } from '@/firebase';
-import { LogoAm } from '@/components/logo-am';
-
+import { BrandLogo } from '@/components/brand-logo';
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -113,9 +112,9 @@ export default function AppLayout({
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-2">
-              <LogoAm className="h-10 w-10" />
+              <BrandLogo className="h-10 w-10 shrink-0" variant="compact" />
               <div className="flex flex-col">
-                <span className="text-lg font-semibold tracking-tight text-sidebar-foreground">
+                <span className="text-lg font-semibold tracking-tight text-sidebar-foreground line-clamp-1">
                   {branding.appName}
                 </span>
                 <span className="text-xs text-sidebar-foreground/70">

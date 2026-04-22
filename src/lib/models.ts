@@ -18,6 +18,7 @@ export interface Profile extends BaseEntity {
     location?: string;
     role: 'admin' | 'user';
     ativo: boolean;
+    photoURL?: string;
 }
 
 export interface CertameUnificado extends BaseEntity {

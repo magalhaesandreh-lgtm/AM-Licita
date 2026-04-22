@@ -4,9 +4,8 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusCircle, MoreHorizontal, Loader2 } from 'lucide-react';
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PlusCircle, MoreHorizontal, Loader2, Upload, Trash2, Camera } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -23,8 +22,10 @@ import { Separator } from '@/components/ui/separator';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase, useUser, useStorage } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { uploadFileToStorage, deleteFileFromStorage } from '@/firebase/storage';
+import Image from 'next/image';
 
 import { custoFixoRepository } from '@/lib/repositories/custo-fixo-repository';
 import { custoVariavelRepository } from '@/lib/repositories/custo-variavel-repository';
@@ -65,8 +66,15 @@ const geraisSchema = z.object({
 function ConfiguracoesGeraisTab() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const storage = useStorage();
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState<{ [key: string]: boolean }>({});
   const { user, isUserLoading } = useUser();
+  const fileInputRefs = {
+    logoUrl: React.useRef<HTMLInputElement>(null),
+    logoCompactUrl: React.useRef<HTMLInputElement>(null),
+    loginLogoUrl: React.useRef<HTMLInputElement>(null),
+  };
   
   const settingsDocRef = useMemoFirebase(() => {
     if (!firestore || !user || isUserLoading) return null;
@@ -129,6 +137,42 @@ function ConfiguracoesGeraisTab() {
       });
     }
   };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
+     const file = e.target.files?.[0];
+     if (!file || !storage || !settingsDocRef) return;
+
+     if (!file.type.startsWith('image/')) {
+       toast({ variant: 'destructive', title: 'Arquivo inválido', description: 'Selecione uma imagem válida.' });
+       return;
+     }
+
+     setIsUploading(prev => ({ ...prev, [fieldName]: true }));
+     try {
+       const path = `branding/${fieldName}_${Date.now()}`;
+       const url = await uploadFileToStorage(storage, path, file);
+       await setDoc(settingsDocRef, { [fieldName]: url }, { merge: true });
+       toast({ title: 'Logo atualizada com sucesso!' });
+     } catch (error) {
+       console.error(`Erro no upload da logo ${fieldName}`, error);
+       toast({ variant: 'destructive', title: 'Erro no Upload', description: 'Tente novamente.' });
+     } finally {
+       setIsUploading(prev => ({ ...prev, [fieldName]: false }));
+       // Clear input
+       const ref = fileInputRefs[fieldName as keyof typeof fileInputRefs];
+       if (ref && ref.current) ref.current.value = '';
+     }
+  };
+
+  const handleRemoveLogo = async (fieldName: string) => {
+    if (!settingsDocRef) return;
+    try {
+      await setDoc(settingsDocRef, { [fieldName]: null }, { merge: true });
+      toast({ title: 'Logo removida.' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao remover', description: 'Tente novamente.' });
+    }
+  };
   
   if (isLoading || isUserLoading) {
     return (
@@ -165,6 +209,72 @@ function ConfiguracoesGeraisTab() {
                 </FormItem>
               )}
             />
+
+            <Separator />
+            <h3 className="text-base font-semibold">Identidade Visual (Logos)</h3>
+            <p className="text-sm text-muted-foreground">O sistema usará o SVG padrão como "fallback" se não houver logo enviada.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { id: 'logoUrl', label: 'Logo Principal', desc: 'Sidebar expandida' },
+                { id: 'logoCompactUrl', label: 'Logo Compacta', desc: 'Sidebar recolhida (Opcional)' },
+                { id: 'loginLogoUrl', label: 'Logo do Login', desc: 'Tela Inicial (Opcional)' }
+              ].map(logo => (
+                <div key={logo.id} className="flex flex-col items-center justify-between space-y-4 rounded-lg border p-4 shadow-sm relative">
+                  <div className="text-center">
+                    <Label className="text-base">{logo.label}</Label>
+                    <p className="text-xs text-muted-foreground">{logo.desc}</p>
+                  </div>
+                  
+                  <div className="flex items-center justify-center h-32 w-full bg-muted/50 rounded-md relative overflow-hidden">
+                    {configs?.[logo.id] ? (
+                      <Image 
+                        src={configs[logo.id]} 
+                        alt={logo.label} 
+                        fill 
+                        className="object-contain p-2" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-sm">Sem imagem</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex w-full gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      disabled={isUploading[logo.id]}
+                      onClick={() => fileInputRefs[logo.id as keyof typeof fileInputRefs].current?.click()}
+                    >
+                      {isUploading[logo.id] ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                      Upload
+                    </Button>
+                    {configs?.[logo.id] && (
+                      <Button 
+                        type="button" 
+                        variant="destructive" 
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        onClick={() => handleRemoveLogo(logo.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={fileInputRefs[logo.id as keyof typeof fileInputRefs]} 
+                      onChange={(e) => handleLogoUpload(e, logo.id)} 
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <Separator />
             <div className="flex items-center space-x-2 rounded-lg border p-3 shadow-sm">
                 <Switch

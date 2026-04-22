@@ -11,24 +11,19 @@ import {
   Phone,
   Briefcase,
   MapPin,
+  Camera,
   Loader2,
 } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useStorage } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { UserAvatarAm } from '@/components/user-avatar-am';
+import { uploadFileToStorage } from '@/firebase/storage';
+import { UserProfileAvatar } from '@/components/user-profile-avatar';
 
 const profileSchema = z.object({
   nome: z.string().min(1, 'O nome completo é obrigatório.'),
@@ -46,7 +41,10 @@ export default function PerfilPage() {
   const { toast } = useToast();
   const { user, profile, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const storage = useStorage();
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -116,6 +114,32 @@ export default function PerfilPage() {
     }
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !firestore || !storage) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ variant: 'destructive', title: 'Arquivo inválido', description: 'Por favor, selecione uma imagem.' });
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      const path = `profiles/${user.uid}/avatar_${Date.now()}`;
+      const url = await uploadFileToStorage(storage, path, file);
+      
+      const profileRef = doc(firestore, 'profiles', user.uid);
+      await updateDoc(profileRef, { photoURL: url, updatedAt: new Date().toISOString() });
+      
+      toast({ title: 'Foto atualizada!', description: 'Sua foto de perfil foi atualizada com sucesso.' });
+    } catch (error) {
+      console.error('Error uploading photo', error);
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível fazer o upload da foto.' });
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   if (isUserLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -141,11 +165,29 @@ export default function PerfilPage() {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader className="items-center text-center">
-                <Avatar className="h-32 w-32">
-                  <AvatarFallback className="text-4xl bg-muted">
-                    <UserAvatarAm />
-                  </AvatarFallback>
-                </Avatar>
+                <div className="relative group">
+                  <UserProfileAvatar className="h-32 w-32" />
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-white hover:bg-white/20 hover:text-white"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                    >
+                      {isUploadingPhoto ? <Loader2 className="h-6 w-6 animate-spin" /> : <Camera className="h-6 w-6" />}
+                      <span className="sr-only">Upload de foto</span>
+                    </Button>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      accept="image/*" 
+                      onChange={handlePhotoUpload} 
+                    />
+                  </div>
+                </div>
                 <CardTitle className="mt-4">
                   {watchedDisplayName || watchedFullName || 'Usuário'}
                 </CardTitle>

@@ -4,6 +4,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -36,6 +37,7 @@ export function getSdks(firebaseApp: FirebaseApp) {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: getFirestore(firebaseApp, (firebaseConfig as any).firestoreDatabaseId),
+    storage: getStorage(firebaseApp, (firebaseConfig as any).storageBucket),
   };
 }
 
