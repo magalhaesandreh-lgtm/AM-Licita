@@ -71,6 +71,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { generatePrecificacaoPdf } from '@/lib/pdf-generator';
 import { useUser } from '@/firebase';
 
+type CertameSavePayload = Partial<Omit<CertameUnificado, 'id' | 'empenhos'>>;
+
+function sanitizeCertameForSave(certame: CertameUnificado): CertameSavePayload {
+    const { id: _id, empenhos: _empenhos, ...certameData } = certame;
+
+    return {
+        ...certameData,
+        itens: (certameData.itens || []).map((item) => {
+            const { metrics: _metrics, ...itemData } = item as ItemPrecificacao & { metrics?: CalculatedItemMetrics };
+            return itemData;
+        }),
+    };
+}
+
 export default function PrecificacaoUnificadaPage() {
     const { toast } = useToast();
     const { user, isUserLoading } = useUser();
@@ -202,7 +216,7 @@ export default function PrecificacaoUnificadaPage() {
     }, [selectedCertame, pricingContext, toast, loadData]);
 
     const updateCertame = async (updatedCertame: CertameUnificado) => {
-        await certameUnificadoRepository.update(updatedCertame.id, updatedCertame);
+        await certameUnificadoRepository.update(updatedCertame.id, sanitizeCertameForSave(updatedCertame));
         onDataChange();
     }
 
@@ -218,6 +232,7 @@ export default function PrecificacaoUnificadaPage() {
     return (
         <div className="space-y-6">
             <CertameSelector certames={allCertames} clientes={clientes} selectedCertame={selectedCertame} selectedClienteFiltroId={clienteFiltroId} onSelect={handleSelectCertame} onDataChange={onDataChange} onClienteFiltroChange={setClienteFiltroId} isLoading={isLoading} />
+            {(isLoading || isUserLoading) && <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
             {isRefreshing && selectedCertame && (
                 <div className="flex items-center justify-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -359,6 +374,85 @@ function InfoKpi({label, value, className}: {label: string, value: string, class
 
 interface ItensTableProps { certame: CertameComCalculo; context: { produtos: Produto[]; categorias: Categoria[]; fornecedores: Fornecedor[]; clientes: any[]; }; onUpdateCertame: (updatedCertame: CertameUnificado) => Promise<void>; }
 
+type PricingTableItem = ItemPrecificacao & { metrics: CalculatedItemMetrics };
+
+const EMPTY_TABLE_VALUE = '--';
+
+function toFiniteNumber(value: number | string | null | undefined): number | null {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value !== 'string') return null;
+
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const normalized = trimmed
+        .replace(/R\$\s?/g, '')
+        .replace(/\s/g, '')
+        .replace(/[^0-9,.-]/g, '');
+    const decimalValue = normalized.includes(',')
+        ? normalized.replace(/\./g, '').replace(',', '.')
+        : /^-?\d{1,3}(\.\d{3})+$/.test(normalized)
+            ? normalized.replace(/\./g, '')
+            : normalized;
+    const parsed = Number(decimalValue);
+
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatTableCurrency(value: number | string | null | undefined): string {
+    const numericValue = toFiniteNumber(value);
+    return numericValue === null ? EMPTY_TABLE_VALUE : formatCurrency(numericValue);
+}
+
+function formatTableNumber(value: number | string | null | undefined, maximumFractionDigits = 4): string {
+    const numericValue = toFiniteNumber(value);
+    if (numericValue === null) return EMPTY_TABLE_VALUE;
+
+    return numericValue.toLocaleString('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits,
+    });
+}
+
+function getItemTotalCost(item: PricingTableItem): number | null {
+    const unitCost = toFiniteNumber(item.metrics.custoTotalUnit);
+    const quantity = toFiniteNumber(item.qtd);
+
+    return unitCost === null || quantity === null ? null : unitCost * quantity;
+}
+
+function getReferenceProfit(item: PricingTableItem): number | null {
+    const referencePrice = toFiniteNumber(item.precoReferencia);
+    const unitCost = toFiniteNumber(item.metrics.custoTotalUnit);
+    const quantity = toFiniteNumber(item.qtd);
+
+    if (referencePrice === null || unitCost === null || quantity === null) return null;
+
+    return (referencePrice - unitCost) * quantity;
+}
+
+function getEconomicViability(item: PricingTableItem): 'Viável' | 'Inviável' | 'Indefinido' {
+    const referencePrice = toFiniteNumber(item.precoReferencia);
+    const finalPrice = toFiniteNumber(item.metrics.precoFinalUnit);
+    const unitCost = toFiniteNumber(item.metrics.custoTotalUnit);
+    const unitProfit = toFiniteNumber(item.metrics.lucroUnit);
+    const quantity = toFiniteNumber(item.qtd);
+
+    if (
+        referencePrice === null ||
+        referencePrice <= 0 ||
+        finalPrice === null ||
+        unitCost === null ||
+        unitProfit === null ||
+        quantity === null ||
+        quantity <= 0
+    ) {
+        return 'Indefinido';
+    }
+
+    return finalPrice <= referencePrice && unitProfit > 0 ? 'Viável' : 'Inviável';
+}
+
 function ItensTable({ certame, context, onUpdateCertame }: ItensTableProps) {
     const { toast } = useToast();
     const { user } = useUser();
@@ -439,13 +533,34 @@ function ItensTable({ certame, context, onUpdateCertame }: ItensTableProps) {
         toast({ title: `Ajuste do Lote ${loteNumero} desfeito.` });
     };
 
-    const columns: ColumnDef<ItemPrecificacao & { metrics: CalculatedItemMetrics }>[] = React.useMemo(() => [
-        { accessorKey: 'itemNumero', header: 'Item' , cell: (row) => <span className={cn(row.status === 'PERDIDO' && 'text-muted-foreground line-through')}>{row.itemNumero}</span> },
-        { accessorKey: 'descricao', header: 'Descrição', cell: (row) => <div className={cn("font-medium min-w-64 max-w-sm", row.status === 'PERDIDO' && 'text-muted-foreground line-through')}>{row.descricao}</div> },
-        { accessorKey: 'unidade', header: 'UN', cell: (row) => row.unidade },
-        { accessorKey: 'status', header: 'Status', cell: (row) => <Badge variant={row.status === 'GANHO' ? 'default' : row.status === 'PERDIDO' ? 'destructive' : 'secondary'} className={cn(row.status === 'GANHO' && 'bg-green-600')}>{row.status}</Badge> },
-        { accessorKey: 'precoFinalUnit', header: 'Preço Final', align: 'right', cell: (row) => <div className="font-bold">{formatCurrency(row.metrics.precoFinalUnit)}</div> },
-        { accessorKey: 'lucroTotal', header: 'Lucro Total', align: 'right', cell: (row) => <div className={cn(row.metrics.resultado === 'PREJUIZO' && 'text-destructive')}>{formatCurrency(row.metrics.lucroTotal)}</div> },
+    const columns: ColumnDef<PricingTableItem>[] = React.useMemo(() => [
+        { accessorKey: 'itemNumero', header: 'Item' , cell: (row) => <span className={cn("block w-12 whitespace-nowrap", row.status === 'PERDIDO' && 'text-muted-foreground line-through')}>{formatTableNumber(row.itemNumero, 0)}</span> },
+        { accessorKey: 'descricao', header: 'Descrição', cell: (row) => <div className={cn("w-[280px] min-w-[220px] max-w-[360px] truncate font-medium", row.status === 'PERDIDO' && 'text-muted-foreground line-through')} title={row.descricao}>{row.descricao || EMPTY_TABLE_VALUE}</div> },
+        { accessorKey: 'unidade', header: 'Unid.', cell: (row) => <span className="block w-14 whitespace-nowrap">{row.unidade || EMPTY_TABLE_VALUE}</span> },
+        { accessorKey: 'qtd', header: 'Qtd. Ref.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableNumber(row.qtd)}</span> },
+        { accessorKey: 'precoReferencia', header: 'Preço Ref.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableCurrency(row.precoReferencia)}</span> },
+        { accessorKey: 'custoTotalUnit', header: 'Custo Unit.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableCurrency(row.metrics.custoTotalUnit)}</span> },
+        { accessorKey: 'custoTotal', header: 'Custo Total', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableCurrency(getItemTotalCost(row))}</span> },
+        { accessorKey: 'precoFinalUnit', header: 'Valor Unit. Final', align: 'right', cell: (row) => <div className="whitespace-nowrap font-bold tabular-nums">{formatTableCurrency(row.metrics.precoFinalUnit)}</div> },
+        { accessorKey: 'lucroUnit', header: 'Lucro Unit.', align: 'right', cell: (row) => <div className={cn("whitespace-nowrap tabular-nums", row.metrics.resultado === 'PREJUIZO' && 'text-destructive')}>{formatTableCurrency(row.metrics.lucroUnit)}</div> },
+        { accessorKey: 'lucroTotal', header: 'Lucro Total', align: 'right', cell: (row) => <div className={cn("whitespace-nowrap tabular-nums", row.metrics.resultado === 'PREJUIZO' && 'text-destructive')}>{formatTableCurrency(row.metrics.lucroTotal)}</div> },
+        { accessorKey: 'lucroReferencia', header: 'Lucro na Ref.', align: 'right', cell: (row) => <div className={cn("whitespace-nowrap tabular-nums", (getReferenceProfit(row) ?? 0) < 0 && 'text-destructive')}>{formatTableCurrency(getReferenceProfit(row))}</div> },
+        { accessorKey: 'viabilidadeEconomica', header: 'Viabilidade', cell: (row) => {
+            const viability = getEconomicViability(row);
+            return (
+                <Badge
+                    variant={viability === 'Inviável' ? 'destructive' : 'secondary'}
+                    className={cn(
+                        "whitespace-nowrap",
+                        viability === 'Viável' && 'bg-green-600 text-white hover:bg-green-700',
+                        viability === 'Indefinido' && 'border-muted-foreground/30 bg-muted text-muted-foreground'
+                    )}
+                >
+                    {viability}
+                </Badge>
+            );
+        }},
+        { accessorKey: 'status', header: 'Status', cell: (row) => <Badge variant={row.status === 'GANHO' ? 'default' : row.status === 'PERDIDO' ? 'destructive' : 'secondary'} className={cn("whitespace-nowrap", row.status === 'GANHO' && 'bg-green-600')}>{row.status || EMPTY_TABLE_VALUE}</Badge> },
         { accessorKey: 'actions', header: 'Ações', align: 'right', cell: (row) => (
             <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleViewComposicao(row)}><Scale className="mr-2 h-4 w-4" />Composição</DropdownMenuItem><DropdownMenuItem onClick={() => handleEditItem(row)}><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem><DropdownMenuItem onClick={() => handleDeleteItem(row)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
