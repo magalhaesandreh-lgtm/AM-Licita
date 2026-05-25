@@ -1,9 +1,9 @@
 export const firebaseConfig = {
-  "projectId": "am-licitaes-v2-86784646-1ace7",
-  "appId": "1:957832976216:web:769b78f43d0ba7062ff72d",
-  "storageBucket": "am-licitaes-v2-86784646-1ace7.appspot.com",
-  "apiKey": "AIzaSyDTQnU-7--xlHM1tyiLrmLnYAfbeAZIK3o",
-  "authDomain": "am-licitaes-v2-86784646-1ace7.firebaseapp.com",
-  "measurementId": "",
-  "messagingSenderId": "957832976216"
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
 };
