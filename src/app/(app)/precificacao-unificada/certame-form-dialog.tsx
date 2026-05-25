@@ -33,6 +33,7 @@ const certameFormSchema = z.object({
   status: z.enum(['EM_ANDAMENTO', 'GANHO', 'PERDIDO', 'CANCELADO']),
   isRetroativo: z.boolean(),
   orcamentoSigiloso: z.boolean(),
+  empresaDestinoId: z.string().optional(),
 });
 type CertameFormValues = z.infer<typeof certameFormSchema>;
 
@@ -41,9 +42,10 @@ interface CertameFormDialogProps {
     onOpenChange: (open: boolean) => void;
     onSuccess: (newCertameId?: string) => void;
     certameToEdit?: CertameUnificado | null;
+    clientes?: any[];
 }
 
-export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit }: CertameFormDialogProps) {
+export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit, clientes = [] }: CertameFormDialogProps) {
     const [isSaving, setIsSaving] = React.useState(false);
     const { toast } = useToast();
     
@@ -116,6 +118,7 @@ export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit
                 sessaoAt: combinedDateTime.toISOString(),
                 inicioVigencia: values.inicioVigencia ? formatDate(values.inicioVigencia, 'yyyy-MM-dd') : undefined,
                 fimVigencia: values.fimVigencia ? formatDate(values.fimVigencia, 'yyyy-MM-dd') : undefined,
+                empresaDestinoNome: clientes.find(c => c.id === values.empresaDestinoId)?.nomeFantasia,
             };
 
             if (certameToEdit) {
@@ -146,6 +149,16 @@ export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit
         >
             <Form {...form}>
             <form id="certame-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {clientes.length > 0 && (
+                    <FormField control={form.control} name="empresaDestinoId" render={({ field }) => (
+                        <FormItem><FormLabel>Empresa Destino</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                                <SelectContent>{clientes.map(c => <SelectItem key={c.id} value={c.id}>{c.nomeFantasia}</SelectItem>)}</SelectContent>
+                            </Select>
+                        <FormMessage /></FormItem>
+                    )} />
+                )}
                 <FormField control={form.control} name="orgao" render={({ field }) => (<FormItem><FormLabel>Órgão*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField control={form.control} name="modalidade" render={({ field }) => (<FormItem><FormLabel>Modalidade*</FormLabel><FormControl><Input placeholder="Pregão, Dispensa..." {...field} /></FormControl><FormMessage /></FormItem>)} />
