@@ -286,3 +286,42 @@ export interface ConfiguracoesGerais {
   aliquotaServico: number;
   overheadPercentManual?: number | null;
 }
+
+// ── Módulo Certidões ──────────────────────────────────────────────────────────
+
+export type TipoCertidao =
+  | 'CND_FEDERAL'
+  | 'CND_ESTADUAL'
+  | 'CND_MUNICIPAL'
+  | 'CRF_FGTS'
+  | 'CNDT'
+  | 'CERTIDAO_FALENCIA'
+  | 'TCU_CGU_CONSOLIDADA'
+  | 'CND_TCE'
+  | 'OUTROS';
+
+export type StatusCertidao = 'VALIDA' | 'A_VENCER' | 'VENCIDA';
+
+export interface Certidao extends BaseEntity {
+  empresaId: string;
+  empresaNome: string;
+  empresaCnpj?: string;
+  tipoEmpresa: 'PROPRIA' | 'ASSESSORADA';
+  tipoCertidao: TipoCertidao;
+  nome: string;
+  dataEmissaoISO?: string;
+  dataVencimentoISO: string;
+  observacoes?: string;
+}
+
+export const TIPO_CERTIDAO_LABELS: Record<TipoCertidao, string> = {
+  CND_FEDERAL:          'CND Federal (Receita + PGFN)',
+  CND_ESTADUAL:         'CND Estadual',
+  CND_MUNICIPAL:        'CND Municipal',
+  CRF_FGTS:            'CRF FGTS',
+  CNDT:                'CNDT Trabalhista',
+  CERTIDAO_FALENCIA:   'Certidão de Falência',
+  TCU_CGU_CONSOLIDADA: 'TCU/CGU/CEIS/CNEP Consolidada',
+  CND_TCE:             'CND TCE',
+  OUTROS:              'Outros',
+};
