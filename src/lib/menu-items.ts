@@ -12,6 +12,7 @@ import {
   Users,
   Settings,
   Calendar,
+  ShieldCheck,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -27,12 +28,11 @@ export const menuItems: MenuItem[] = [
   { path: '/precificacao-unificada', title: 'Certames (Planilha)', icon: ClipboardList },
   { path: '/agenda', title: 'Agenda', icon: Calendar },
   { path: '/assessoria', title: 'Assessoria', icon: Briefcase },
+  { path: '/certidoes', title: 'Certidões', icon: ShieldCheck },
   { path: '/orcamentos', title: 'Orçamentos', icon: FileBarChart2 },
   { path: '/fornecedores', title: 'Fornecedores', icon: Building2 },
   { path: '/parametros', title: 'Categorias', icon: Layers },
   { path: '/relatorios', title: 'Relatórios', icon: BookUser },
   { path: '/metas', title: 'Metas', icon: Target },
   { path: '/configuracoes', title: 'Configurações', icon: Settings, adminOnly: true },
-  { path: '/usuarios', title: 'Usuários', icon: Users, adminOnly: true },
-  { path: '/ajuda', title: 'Ajuda', icon: HelpCircle },
-];
+  { path: '/usuarios', title: 'Usuários', icon: User
