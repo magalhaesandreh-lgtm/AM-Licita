@@ -35,4 +35,6 @@ export const menuItems: MenuItem[] = [
   { path: '/relatorios', title: 'Relatórios', icon: BookUser },
   { path: '/metas', title: 'Metas', icon: Target },
   { path: '/configuracoes', title: 'Configurações', icon: Settings, adminOnly: true },
-  { path: '/usuarios', title: 'Usuários', icon: User
+  { path: '/usuarios', title: 'Usuários', icon: Users, adminOnly: true },
+  { path: '/ajuda', title: 'Ajuda', icon: HelpCircle },
+];
