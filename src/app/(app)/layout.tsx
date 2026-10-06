@@ -26,6 +26,7 @@ import {
 import { useBranding } from '@/hooks/use-branding';
 import { useAuth, useUser } from '@/firebase';
 import { BrandLogo } from '@/components/brand-logo';
+import { AgentBridge } from '@/components/agent-bridge';
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -108,6 +109,7 @@ export default function AppLayout({
 
   return (
     <SidebarProvider>
+      <AgentBridge />
       <div className="flex h-screen w-screen overflow-hidden">
         <Sidebar>
           <SidebarHeader>
