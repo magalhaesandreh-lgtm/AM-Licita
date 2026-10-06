@@ -13,6 +13,7 @@ import {
   Settings,
   Calendar,
   ShieldCheck,
+  ListTodo,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -26,6 +27,7 @@ export interface MenuItem {
 export const menuItems: MenuItem[] = [
   { path: '/dashboard', title: 'Dashboard', icon: LayoutDashboard, exact: true },
   { path: '/precificacao-unificada', title: 'Certames (Planilha)', icon: ClipboardList },
+  { path: '/pendencias', title: 'Pendências', icon: ListTodo },
   { path: '/agenda', title: 'Agenda', icon: Calendar },
   { path: '/assessoria', title: 'Assessoria', icon: Briefcase },
   { path: '/certidoes', title: 'Certidões', icon: ShieldCheck },
