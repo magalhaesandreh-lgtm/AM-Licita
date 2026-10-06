@@ -325,3 +325,24 @@ export const TIPO_CERTIDAO_LABELS: Record<TipoCertidao, string> = {
   CND_TCE:             'CND TCE',
   OUTROS:              'Outros',
 };
+
+// ===============================================================
+// Painel de Pendências (equipe de agentes Claude + André)
+// ===============================================================
+export type StatusPendencia = 'ABERTA' | 'RESOLVIDA';
+export type PrioridadePendencia = 'ALTA' | 'MEDIA' | 'BAIXA';
+
+export interface Pendencia extends BaseEntity {
+  funcionario: string;          // Ex.: 'Paula', 'Lucas', 'Fábio', 'Otávio', 'Diana', 'André'
+  contexto: string;             // Ex.: 'Cozinha Solidária – set/2026'
+  titulo: string;               // O que precisa ser entregue/decidido
+  descricao?: string;           // Detalhe do que falta
+  referencia?: string;          // Caminho do arquivo de status, link, nº de processo
+  prazo?: string | null;        // ISO (yyyy-mm-dd)
+  prioridade: PrioridadePendencia;
+  status: StatusPendencia;
+  origem: 'AGENTE' | 'MANUAL';
+  chave?: string;               // Identificador estável para o agente atualizar sem duplicar
+  resolucao?: string;           // Como foi resolvida
+  resolvidaEm?: string | null;  // ISO
+}
