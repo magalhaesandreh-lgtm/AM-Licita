@@ -15,8 +15,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
 import type { Pendencia, PrioridadePendencia } from '@/lib/models';
 import { pendenciaRepository, type NovaPendencia } from '@/lib/repositories/pendencia-repository';
+import { PENDENCIAS_ALTERADAS } from '@/components/agent-bridge';
 
-const FUNCIONARIOS = ['Paula', 'Lucas', 'Fábio', 'Diana', 'Otávio', 'André'];
+const FUNCIONARIOS = ['Marcos', 'Paula', 'Lucas', 'Fábio', 'Diana', 'Otávio', 'Dr. Ricardo', 'Davi', 'André'];
 
 type FiltroStatus = 'ABERTA' | 'RESOLVIDA' | 'TODAS';
 
@@ -90,34 +91,12 @@ export default function PendenciasPage() {
     carregar();
   }, [user, isUserLoading, carregar]);
 
-  // API para os agentes (Claude) operarem o painel pelo navegador, com a sessão do usuário logado.
+  // Recarrega quando um agente registra ou dá baixa pela ponte (window.amGestao).
   React.useEffect(() => {
-    if (!user) return;
-    const api = {
-      listar: async (status: FiltroStatus = 'ABERTA') => {
-        const todos = await pendenciaRepository.list();
-        return status === 'TODAS' ? todos : todos.filter(p => p.status === status);
-      },
-      criar: async (dados: NovaPendencia) => {
-        const id = await pendenciaRepository.upsert({ origem: 'AGENTE', ...dados });
-        await carregar();
-        return id;
-      },
-      resolver: async (chaveOuId: string, resolucao?: string) => {
-        let n = await pendenciaRepository.resolverPorChave(chaveOuId, resolucao);
-        if (n === 0) {
-          await pendenciaRepository.resolver(chaveOuId, resolucao);
-          n = 1;
-        }
-        await carregar();
-        return n;
-      },
-    };
-    (window as any).amPendencias = api;
-    return () => {
-      delete (window as any).amPendencias;
-    };
-  }, [user, carregar]);
+    const recarregar = () => carregar();
+    window.addEventListener(PENDENCIAS_ALTERADAS, recarregar);
+    return () => window.removeEventListener(PENDENCIAS_ALTERADAS, recarregar);
+  }, [carregar]);
 
   const visiveis = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -210,7 +189,7 @@ export default function PendenciasPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pendências</h1>
-          <p className="text-muted-foreground">O que a equipe (Paula, Lucas, Fábio, Diana, Otávio) precisa de você para seguir.</p>
+          <p className="text-muted-foreground">O que a equipe precisa de você para seguir.</p>
         </div>
         <Button onClick={abrirNova}>
           <PlusCircle className="mr-2 h-4 w-4" /> Nova pendência
