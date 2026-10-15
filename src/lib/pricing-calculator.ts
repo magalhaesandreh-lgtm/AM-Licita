@@ -15,6 +15,12 @@ export interface CalculatedItemMetrics {
   // Simulação
   custoTotalUnit: number;
   margemAplicadaPercent: number;
+  /**
+   * Base da margem exibida: 'PRECO_FINAL' (regra vigente, definida pelo André em 14/10/2026: lucro final
+   * sobre o preço final, depois de custos, variáveis e impostos) ou 'PRECO_LIQUIDO' (regra antiga, mantida
+   * nos certames congelados para que propostas já enviadas não mudem de valor).
+   */
+  margemSobre: 'PRECO_FINAL' | 'PRECO_LIQUIDO';
   precoLiquidoUnit: number;
   aliquotaImpostoPercent: number;
   impostoUnit: number;
@@ -55,16 +61,31 @@ export function calculateCertamePricing(
       const aliquotaImpostoPercent = item.aliquotaPct;
       const aliquotaImposto = aliquotaImpostoPercent / 100;
 
-      // Path 1: Simulation based on margin to find the simulated price
-      const precoLiquidoUnit_simulado = custoTotalUnit > 0 && margemAplicadaPercent < 100 
-        ? custoTotalUnit / (1 - (margemAplicadaPercent / 100))
-        : custoTotalUnit;
-      
-      const precoFinalUnit_simulado = precoLiquidoUnit_simulado > 0 && aliquotaImposto < 1
-        ? precoLiquidoUnit_simulado / (1 - aliquotaImposto)
-        : precoLiquidoUnit_simulado;
+      // Path 1: Simulation based on margin to find the simulated price.
+      //
+      // Certames abertos: margem sobre o PREÇO FINAL, depois de todos os custos e impostos.
+      //   preço final = custo total ÷ (1 − alíquota − margem)
+      // Certames congelados: mantém a regra antiga (margem sobre o preço sem imposto), para que
+      // propostas já enviadas ou ganhas não mudem de valor retroativamente.
+      const margemSobreFinal = !safeCertame.congelado;
+      const margemFrac = margemAplicadaPercent / 100;
 
-      const lucroUnit_simulado = precoLiquidoUnit_simulado - custoTotalUnit;
+      let precoFinalUnit_simulado: number;
+      let lucroUnit_simulado: number;
+
+      if (margemSobreFinal) {
+        const divisor = 1 - aliquotaImposto - margemFrac;
+        precoFinalUnit_simulado = custoTotalUnit > 0 && divisor > 0 ? custoTotalUnit / divisor : custoTotalUnit;
+        lucroUnit_simulado = precoFinalUnit_simulado * (1 - aliquotaImposto) - custoTotalUnit;
+      } else {
+        const precoLiquidoUnit_simulado = custoTotalUnit > 0 && margemAplicadaPercent < 100
+          ? custoTotalUnit / (1 - margemFrac)
+          : custoTotalUnit;
+        precoFinalUnit_simulado = precoLiquidoUnit_simulado > 0 && aliquotaImposto < 1
+          ? precoLiquidoUnit_simulado / (1 - aliquotaImposto)
+          : precoLiquidoUnit_simulado;
+        lucroUnit_simulado = precoLiquidoUnit_simulado - custoTotalUnit;
+      }
 
       // Path 2: Determine the definitive price and profit to be used for display and aggregation
       let precoFinalUnit: number;
@@ -86,7 +107,8 @@ export function calculateCertamePricing(
       // Final derived metrics for display
       const impostoUnit = precoFinalUnit * aliquotaImposto;
       const precoLiquidoUnit = precoFinalUnit - impostoUnit;
-      const margemFinalPercent = precoLiquidoUnit > 0 ? (lucroUnit / precoLiquidoUnit) * 100 : 0;
+      const baseMargem = margemSobreFinal ? precoFinalUnit : precoLiquidoUnit;
+      const margemFinalPercent = baseMargem > 0 ? (lucroUnit / baseMargem) * 100 : 0;
       
       let resultado: CalculatedItemMetrics['resultado'] = 'NEUTRO';
       if (lucroTotal > 0.001) resultado = 'GANHO';
@@ -106,6 +128,7 @@ export function calculateCertamePricing(
       return {
         custoTotalUnit,
         margemAplicadaPercent: margemFinalPercent,
+        margemSobre: margemSobreFinal ? 'PRECO_FINAL' : 'PRECO_LIQUIDO',
         precoLiquidoUnit,
         aliquotaImpostoPercent,
         impostoUnit,

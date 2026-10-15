@@ -37,7 +37,7 @@ export function ComposicaoDialog({ open, onOpenChange, item: incomingItem }: Com
                             <TableRow className="font-bold"><TableCell>(=) Receita Líquida</TableCell><TableCell className="text-right">{formatCurrency(m.precoLiquidoUnit)}</TableCell></TableRow>
                             <TableRow><TableCell>(-) Custos Totais (Base+Frete+Overhead)</TableCell><TableCell className="text-right">{formatCurrency(m.custoTotalUnit)}</TableCell></TableRow>
                             <TableRow className={cn("font-bold", m.resultado === 'PREJUIZO' && "text-destructive")}><TableCell>(=) Lucro/Prejuízo</TableCell><TableCell className="text-right">{formatCurrency(m.lucroUnit)}</TableCell></TableRow>
-                            <TableRow><TableCell>Margem Líquida</TableCell><TableCell className="text-right font-semibold">{m.margemAplicadaPercent.toFixed(2)}%</TableCell></TableRow>
+                            <TableRow><TableCell>{m.margemSobre === 'PRECO_FINAL' ? 'Margem de lucro (sobre o preço final)' : 'Margem líquida (sobre o preço sem imposto)'}</TableCell><TableCell className="text-right font-semibold">{m.margemAplicadaPercent.toFixed(2)}%</TableCell></TableRow>
                         </TableBody>
                     </Table>
                 </div>
