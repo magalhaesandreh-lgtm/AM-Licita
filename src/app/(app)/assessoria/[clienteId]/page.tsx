@@ -42,6 +42,7 @@ import { calculateCertamePricing, type FullPricingContext } from '@/lib/pricing-
 import { calcularExitoHibrido, calcularExitoPorFaixa } from '@/lib/assessoria/fee-calculator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useUser } from '@/firebase';
+import { PrecificacaoAssessoriaPanel } from '../components/precificacao-assessoria';
 
 type CertameComMetricas = CertameUnificado & {
     totalPrevisto: number;
@@ -282,6 +283,7 @@ export default function ClientePainelPage() {
                     <TabsTrigger value="kanban">Kanban (Demandas)</TabsTrigger>
                     <TabsTrigger value="financeiro">Financeiro (Assessoria)</TabsTrigger>
                     <TabsTrigger value="certames">Certames/Execução (B2G)</TabsTrigger>
+                    <TabsTrigger value="precificacao">Precificação</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview" className="mt-4">
                     <VisaoGeralTab cliente={cliente} cobrancas={cobrancas} certames={certamesDoCliente} statusFinanceiro={statusFinanceiro}/>
@@ -306,6 +308,9 @@ export default function ClientePainelPage() {
                 </TabsContent>
                 <TabsContent value="certames" className="mt-4">
                     <CertamesTab certames={certamesComMetricas} />
+                </TabsContent>
+                <TabsContent value="precificacao" className="mt-4">
+                    <PrecificacaoAssessoriaPanel cliente={cliente} onVinculoAtualizado={handleDataChange} />
                 </TabsContent>
             </Tabs>
             {isCardFormOpen && (
@@ -543,7 +548,7 @@ function FinanceiroTab({ cliente, cobrancas, empenhos, onDataChange }: { cliente
             if (cliente.vinculo.tipoVinculo === 'MENSAL' || cliente.vinculo.tipoVinculo === 'HIBRIDO') {
                 const existeMensalidade = cobrancas.some(c => c.tipo === 'MENSALIDADE' && c.competenciaMes === mesAtual && c.competenciaAno === anoAtual);
                 if (!existeMensalidade) {
-                    const valorMensalidade = cliente.vinculo.tipoVinculo === 'HIBRIDO' ? 1200 : cliente.vinculo.mensalidade || 0;
+                    const valorMensalidade = cliente.vinculo.mensalidade ?? (cliente.vinculo.tipoVinculo === 'HIBRIDO' ? 1200 : 0);
                     if (valorMensalidade > 0) {
                         await cobrancaRepository.create({
                             clienteId: cliente.id, competenciaMes: mesAtual, competenciaAno: anoAtual,
@@ -629,13 +634,14 @@ function FinanceiroTab({ cliente, cobrancas, empenhos, onDataChange }: { cliente
                         <>
                             <div>
                                 <p className="font-semibold text-muted-foreground">Tipo</p><p>{cliente.vinculo.tipoVinculo}</p>
-                                {(cliente.vinculo.tipoVinculo === 'MENSAL' || cliente.vinculo.tipoVinculo === 'HIBRIDO') && <><p className="font-semibold text-muted-foreground mt-2">Mensalidade</p><p>{formatCurrency(cliente.vinculo.tipoVinculo === 'HIBRIDO' ? 1200 : cliente.vinculo.mensalidade || 0)}</p></>}
+                                {(cliente.vinculo.tipoVinculo === 'MENSAL' || cliente.vinculo.tipoVinculo === 'HIBRIDO') && <><p className="font-semibold text-muted-foreground mt-2">Mensalidade</p><p>{formatCurrency(cliente.vinculo.mensalidade ?? (cliente.vinculo.tipoVinculo === 'HIBRIDO' ? 1200 : 0))}</p></>}
                                 {(cliente.vinculo.tipoVinculo === 'MENSAL' || cliente.vinculo.tipoVinculo === 'HIBRIDO') && <><p className="font-semibold text-muted-foreground mt-2">Dia Vencimento</p><p>{cliente.vinculo.diaVencimento || 'N/A'}</p></>}
                             </div>
                             <div>
                                 {cliente.vinculo.tipoVinculo === 'EXITO' && (
                                     <>
-                                    <p className="font-semibold text-muted-foreground">Tabela de Faixas (Êxito)</p>
+                                    <p className="font-semibold text-muted-foreground">Tabela de Faixas (Êxito, escala progressiva)</p>
+                                    <p className="text-xs text-muted-foreground mb-1">Cada percentual incide só sobre a parcela do valor dentro da faixa.</p>
                                     <Table>
                                         <TableBody>
                                             <TableRow><TableCell>Até 50mil</TableCell><TableCell>10%</TableCell></TableRow>
@@ -649,7 +655,8 @@ function FinanceiroTab({ cliente, cobrancas, empenhos, onDataChange }: { cliente
                                 )}
                                 {cliente.vinculo.tipoVinculo === 'HIBRIDO' && (
                                     <>
-                                    <p className="font-semibold text-muted-foreground">Tabela de Faixas (Êxito)</p>
+                                    <p className="font-semibold text-muted-foreground">Tabela de Faixas (Êxito, escala progressiva)</p>
+                                    <p className="text-xs text-muted-foreground mb-1">Cada percentual incide só sobre a parcela do valor dentro da faixa.</p>
                                     <Table>
                                         <TableBody>
                                             <TableRow><TableCell>Até 1M</TableCell><TableCell>4%</TableCell></TableRow>

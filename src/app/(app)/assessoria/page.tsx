@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PlusCircle, MoreHorizontal, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, CheckCircle, XCircle, AlertCircle, Calculator } from 'lucide-react';
 import { getMonth, getYear } from 'date-fns';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -234,7 +234,10 @@ export default function AssessoriaPage() {
               <CardTitle>Assessoria</CardTitle>
               <CardDescription>Gerencie suas empresas assessoradas.</CardDescription>
             </div>
-            <Button onClick={handleNew}><PlusCircle className="mr-2 h-4 w-4" /> Nova Empresa</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" asChild><Link href="/assessoria/precificacao"><Calculator className="mr-2 h-4 w-4" /> Precificar proposta</Link></Button>
+              <Button onClick={handleNew}><PlusCircle className="mr-2 h-4 w-4" /> Nova Empresa</Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
