@@ -3,17 +3,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Settings - required for branding even when not logged in
-    match /settings/global {
-      allow read: if true;
-      allow write: if isAuthenticated() && (
-        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin' ||
-        request.auth.token.email == "magalhaesandreh@gmail.com"
-      );
-    }
-
     // ===============================================================
-    // Helper Functions
+    // Funções auxiliares
     // ===============================================================
 
     function isAuthenticated() {
@@ -24,41 +15,75 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Administrador: e-mail do André ou perfil com role 'admin'.
     function isAdmin() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin' ||
-         request.auth.token.email == "magalhaesandreh@gmail.com");
+      return isAuthenticated() && (
+        request.auth.token.email == "magalhaesandreh@gmail.com" ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Usuário ativo: administrador ou perfil aprovado (ativo == true).
+    // Quem acabou de se cadastrar fica com ativo == false até o admin aprovar.
+    function isActiveUser() {
+      return isAdmin() || (
+        isAuthenticated() &&
+        exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.ativo == true
+      );
     }
 
     // ===============================================================
-    // Rules
+    // Configurações globais (branding precisa ler sem login)
     // ===============================================================
 
-    // Profiles
+    match /settings/global {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Perfis
+    // ===============================================================
+
     match /profiles/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+
+      // Cadastro novo: só o próprio usuário, como 'user' e aguardando aprovação.
+      // O administrador (e-mail do André) pode criar o próprio perfil sem restrição.
+      allow create: if isOwner(userId) && (
+        isAdmin() ||
+        (request.resource.data.role == 'user' && request.resource.data.ativo == false)
+      );
+
+      // O próprio usuário só altera dados pessoais; role e ativo são do admin.
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['nome', 'displayName', 'cargo', 'telefone', 'companyName', 'location', 'photoURL', 'updatedAt'])
+      );
+
       allow delete: if isAdmin();
     }
-    
-    // Default Access for main collections
-    // We use a wildcard and ensure users are at least signed in.
+
+    // ===============================================================
+    // Demais coleções: somente usuário ativo (aprovado).
+    // 'profiles' e 'settings' têm regras próprias acima; as regras do
+    // Firestore se somam, então elas ficam fora deste curinga.
+    // ===============================================================
+
     match /{collection}/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if collection != 'profiles' && collection != 'settings' && isActiveUser();
     }
 
-    // Precise subcollection rules for certames
-    match /certames/{certameId} {
-      allow read, write: if isAuthenticated();
-      
-      match /empenhos/{empenhoId} {
-        allow read, write: if isAuthenticated();
-        
-        match /nfs/{nfId} {
-          allow read, write: if isAuthenticated();
-        }
-      }
+    // Subcoleções de certames
+    match /certames/{certameId}/empenhos/{empenhoId} {
+      allow read, write: if isActiveUser();
+    }
+
+    match /certames/{certameId}/empenhos/{empenhoId}/nfs/{nfId} {
+      allow read, write: if isActiveUser();
     }
   }
 }

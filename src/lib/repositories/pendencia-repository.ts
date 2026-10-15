@@ -1,6 +1,6 @@
 'use client';
 
-import { collection, doc, getDocs, query, where, setDoc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import { firestore } from '@/firebase/firestore-instance';
 import type { Pendencia } from '@/lib/models';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -37,8 +37,13 @@ class PendenciaRepository {
     return ref.id;
   }
 
+  /** Atualiza uma pendência existente (não cria documento novo se o id não existir). */
   async update(id: string, data: Partial<Omit<Pendencia, 'id'>>): Promise<void> {
-    await setDoc(doc(this.col(), id), { ...data, updatedAt: new Date().toISOString() }, { merge: true });
+    await updateDoc(doc(this.col(), id), { ...data, updatedAt: new Date().toISOString() });
+  }
+
+  async exists(id: string): Promise<boolean> {
+    return (await getDoc(doc(this.col(), id))).exists();
   }
 
   async resolver(id: string, resolucao?: string): Promise<void> {

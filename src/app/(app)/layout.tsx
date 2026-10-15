@@ -48,7 +48,7 @@ export default function AppLayout({
   children: React.ReactNode;
 }>) {
   const branding = useBranding();
-  const { user, isUserLoading, userError } = useUser();
+  const { user, profile, isUserLoading, userError } = useUser();
   const auth = useAuth();
   const router = useRouter();
 
@@ -91,6 +91,33 @@ export default function AppLayout({
             <Button className="w-full" onClick={handleForceLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Sair e tentar novamente
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // Cadastro novo fica aguardando aprovação do administrador (ver firestore.rules).
+  if (profile && profile.ativo === false && profile.role !== 'admin') {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Acesso aguardando aprovação</CardTitle>
+            <CardDescription>
+              Sua conta foi criada, mas ainda não foi liberada pelo administrador do sistema.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Assim que o acesso for liberado, basta entrar novamente. Se for o caso, avise o administrador.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button className="w-full" onClick={handleForceLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sair
             </Button>
           </CardFooter>
         </Card>

@@ -77,7 +77,7 @@ export default function LoginPage() {
         // The profile creation is now handled by the FirebaseProvider for robustness.
         // This only creates the auth user.
         await createUserWithEmailAndPassword(auth, data.email, data.password);
-        toast({ title: 'Conta criada com sucesso!' });
+        toast({ title: 'Solicitação enviada', description: 'Sua conta foi criada e aguarda a liberação do administrador.' });
         router.push('/dashboard');
       }
     } catch (error: any) {
@@ -133,7 +133,7 @@ export default function LoginPage() {
   const getTitle = () => {
     switch (mode) {
       case 'signup':
-        return 'Criar Conta';
+        return 'Solicitar acesso';
       case 'reset':
         return 'Redefinir Senha';
       default:
@@ -219,7 +219,7 @@ export default function LoginPage() {
               {mode === 'signup' && (
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 animate-spin" />}
-                  Criar Conta
+                  Solicitar acesso
                 </Button>
               )}
               {mode === 'reset' && (
@@ -239,9 +239,9 @@ export default function LoginPage() {
           <div className="mt-4 text-center text-sm">
             {mode === 'login' && (
               <>
-                Não tem uma conta?{' '}
+                Ainda não tem acesso?{' '}
                 <Button variant="link" onClick={() => setMode('signup')} className="p-0">
-                  Crie agora
+                  Solicitar acesso
                 </Button>
               </>
             )}

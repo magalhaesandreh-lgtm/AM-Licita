@@ -1,6 +1,6 @@
 'use client';
 
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { firestore } from '@/firebase/firestore-instance';
 import { errorEmitter, FirestorePermissionError } from "@/firebase";
 
@@ -25,10 +25,10 @@ class ImpostoRepository {
     if (docSnap.exists()) {
       const data = docSnap.data();
       return {
-        anexoProduto: data.anexoProduto || 'I',
-        aliquotaProduto: data.aliquotaProduto || 4.5,
-        anexoServico: data.anexoServico || 'III',
-        aliquotaServico: data.aliquotaServico || 6.0,
+        anexoProduto: data.anexoProduto ?? 'I',
+        aliquotaProduto: data.aliquotaProduto ?? 4.5,
+        anexoServico: data.anexoServico ?? 'III',
+        aliquotaServico: data.aliquotaServico ?? 6.0,
       };
     }
     // Return default values if the document doesn't exist
@@ -42,7 +42,8 @@ class ImpostoRepository {
 
   async saveSettings(settings: Partial<ImpostoSettings>): Promise<void> {
     const docRef = this.getDocRef();
-    await updateDoc(docRef, settings);
+    // merge: cria o documento se ainda não existir
+    await setDoc(docRef, settings, { merge: true });
   }
 }
 

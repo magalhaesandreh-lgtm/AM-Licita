@@ -62,7 +62,7 @@ function criarApi() {
     },
     resolver: async (chaveOuId: string, resolucao?: string) => {
       let n = await pendenciaRepository.resolverPorChave(chaveOuId, resolucao);
-      if (n === 0) {
+      if (n === 0 && (await pendenciaRepository.exists(chaveOuId))) {
         await pendenciaRepository.resolver(chaveOuId, resolucao);
         n = 1;
       }
