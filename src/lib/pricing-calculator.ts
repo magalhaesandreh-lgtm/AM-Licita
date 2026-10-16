@@ -34,6 +34,63 @@ export interface CalculatedItemMetrics {
   lucroReal?: number;
   margemRealPct?: number;
   resultadoReal?: 'LUCRO' | 'PREJUIZO';
+  /**
+   * Cálculo retroativo: o item tem preço vencedor mas não tem custo informado. O custo é estimado a partir
+   * do preço (regra nova de margem) e tudo que depende dele é ESTIMADO, não real.
+   */
+  estimado: boolean;
+  /** Estimativa impossível (alíquota + margem >= 100%): custo e lucro não foram calculados. */
+  estimativaIndisponivel?: boolean;
+  custoBaseEstimadoUnit?: number;
+  freteEstimadoUnit?: number;
+  overheadEstimadoUnit?: number;
+}
+
+/** Percentuais (frações) usados para ratear custos sobre o custo base do item. */
+export interface RateiosPercentuais {
+  fretePct: number;
+  overheadPct: number;
+  variavelPct: number;
+}
+
+export function rateiosPercentuais(context: FullPricingContext): RateiosPercentuais {
+  const cfg = context.configuracoes;
+  const totalCustosFixosAtivos = context.custosFixos.filter(c => c.ativo).reduce((acc, c) => acc + c.valorMensal, 0);
+  const overheadPct = cfg.overheadPercentManual && cfg.overheadPercentManual > 0
+    ? cfg.overheadPercentManual / 100
+    : (cfg.faturamentoMensalPrevisto && cfg.faturamentoMensalPrevisto > 0 ? totalCustosFixosAtivos / cfg.faturamentoMensalPrevisto : 0);
+  const variavelPct = context.custosVariaveis
+    .filter(c => c.ativo && c.tipoRateio === 'PERCENT_CERTAME')
+    .reduce((acc, c) => acc + c.valor, 0) / 100;
+  return { fretePct: (cfg.fretePadraoPercent || 0) / 100, overheadPct, variavelPct };
+}
+
+/** Item com preço vencedor e sem custo informado: o custo será estimado (cálculo retroativo). */
+export function itemEhEstimado(item: Pick<ItemPrecificacao, 'precoFinalVendidoReal' | 'custoUnitBase'>): boolean {
+  return !!item.precoFinalVendidoReal && item.precoFinalVendidoReal > 0 && !(item.custoUnitBase > 0);
+}
+
+export interface EstimativaRetroativa {
+  disponivel: boolean;
+  custoTotalUnit: number;
+  custoBaseUnit: number;
+  freteUnit: number;
+  overheadUnit: number;
+}
+
+/**
+ * Cálculo retroativo (regra de margem definida em 14/10/2026: lucro sobre o preço final, depois de tudo):
+ *   preço = custo total ÷ (1 − alíquota − margem)   =>   custo total = preço × (1 − alíquota − margem)
+ * O custo total é então separado em custo base + frete + rateios (fixo e variável percentual), usando os
+ * percentuais atuais das configurações: custo total = base × (1 + frete% + overhead% + variável%).
+ */
+export function estimarCustoRetroativo(precoUnit: number, aliquotaPct: number, margemPct: number, r: RateiosPercentuais): EstimativaRetroativa {
+  const fracCusto = 1 - aliquotaPct / 100 - margemPct / 100;
+  if (!(precoUnit > 0) || fracCusto <= 0) return { disponivel: false, custoTotalUnit: 0, custoBaseUnit: 0, freteUnit: 0, overheadUnit: 0 };
+  const custoTotalUnit = precoUnit * fracCusto;
+  const fator = 1 + r.fretePct + r.overheadPct + r.variavelPct;
+  const custoBaseUnit = custoTotalUnit / fator;
+  return { disponivel: true, custoTotalUnit, custoBaseUnit, freteUnit: custoBaseUnit * r.fretePct, overheadUnit: custoBaseUnit * (r.overheadPct + r.variavelPct) };
 }
 
 export type CertameComCalculo = CertameUnificado & { itens: (ItemPrecificacao & { metrics: CalculatedItemMetrics })[] };
@@ -53,6 +110,8 @@ export function calculateCertamePricing(
     return null;
   }
   
+  const rateios = rateiosPercentuais(context);
+
   // This is the core logic for an individual item's metrics.
   // It's used for both frozen and non-frozen states.
   const calculateMetricsForItem = (item: ItemPrecificacao, custoTotalUnit: number): CalculatedItemMetrics => {
@@ -61,13 +120,21 @@ export function calculateCertamePricing(
       const aliquotaImpostoPercent = item.aliquotaPct;
       const aliquotaImposto = aliquotaImpostoPercent / 100;
 
+      // Cálculo retroativo: só o preço vencedor foi informado, o custo é estimado a partir dele.
+      const estimado = itemEhEstimado(item);
+      const estimativa = estimado
+        ? estimarCustoRetroativo(item.precoFinalVendidoReal as number, aliquotaImpostoPercent, margemAplicadaPercent, rateios)
+        : null;
+      if (estimativa) custoTotalUnit = estimativa.custoTotalUnit;
+
       // Path 1: Simulation based on margin to find the simulated price.
       //
       // Certames abertos: margem sobre o PREÇO FINAL, depois de todos os custos e impostos.
       //   preço final = custo total ÷ (1 − alíquota − margem)
       // Certames congelados: mantém a regra antiga (margem sobre o preço sem imposto), para que
       // propostas já enviadas ou ganhas não mudem de valor retroativamente.
-      const margemSobreFinal = !safeCertame.congelado;
+      // Itens estimados (retroativo) sempre usam a regra nova, mesmo em certame congelado.
+      const margemSobreFinal = !safeCertame.congelado || estimado;
       const margemFrac = margemAplicadaPercent / 100;
 
       let precoFinalUnit_simulado: number;
@@ -140,6 +207,11 @@ export function calculateCertamePricing(
         // Pass through raw values for reference if they exist, but don't use them in primary display logic
         lucroReal: item.lucroReal,
         margemRealPct: item.margemRealPct,
+        estimado,
+        estimativaIndisponivel: estimativa ? !estimativa.disponivel : undefined,
+        custoBaseEstimadoUnit: estimativa?.disponivel ? estimativa.custoBaseUnit : undefined,
+        freteEstimadoUnit: estimativa?.disponivel ? estimativa.freteUnit : undefined,
+        overheadEstimadoUnit: estimativa?.disponivel ? estimativa.overheadUnit : undefined,
       };
   };
 
@@ -157,7 +229,16 @@ export function calculateCertamePricing(
   // For a NON-FROZEN certame, we first recalculate apportioned costs (frete/overhead)
   // based on the current global settings.
 
-  const subtotalCustoCertame = safeCertame.itens.reduce((acc, item) => acc + (item.custoUnitBase * item.qtd), 0);
+  // Base de custo do item para ratear frete e variáveis: o custo informado ou, nos itens retroativos,
+  // o custo base estimado a partir do preço vencedor.
+  const baseParaRateio = (item: ItemPrecificacao) => {
+    if (!itemEhEstimado(item)) return item.custoUnitBase;
+    const categoria = context.categorias.find(c => c.id === item.categoriaId);
+    const margem = item.margemManualPct ?? categoria?.margemPadraoPercent ?? 0;
+    return estimarCustoRetroativo(item.precoFinalVendidoReal as number, item.aliquotaPct, margem, rateios).custoBaseUnit;
+  };
+
+  const subtotalCustoCertame = safeCertame.itens.reduce((acc, item) => acc + (baseParaRateio(item) * item.qtd), 0);
 
   const freteCertame = (context.configuracoes.fretePadraoPercent / 100) * subtotalCustoCertame;
   
@@ -191,7 +272,7 @@ export function calculateCertamePricing(
     // Create a mutable copy to hold the newly calculated costs
     const mutableItem = { ...item };
 
-    const itemCustoTotalBase = mutableItem.custoUnitBase * mutableItem.qtd;
+    const itemCustoTotalBase = baseParaRateio(mutableItem) * mutableItem.qtd;
     const itemProportion = subtotalCustoCertame > 0 ? itemCustoTotalBase / subtotalCustoCertame : (1 / (safeCertame.itens.length || 1));
 
     // Update the item's apportioned costs for this calculation session

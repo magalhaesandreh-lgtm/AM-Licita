@@ -39,7 +39,7 @@ export const generatePrecificacaoPdf = (certame: CertameComCalculo, fornecedores
             fornecedorNome,
             item.marca || '-',
             item.modelo || '-',
-            formatCurrency(item.custoUnitBase),
+            formatCurrency(item.metrics.custoBaseEstimadoUnit ?? item.custoUnitBase),
             formatCurrency(item.freteUnitario),
             formatCurrency(item.custoFixoRateadoUnit),
             `${formatCurrency(item.metrics.impostoUnit)} (${item.metrics.aliquotaImpostoPercent.toFixed(2)}%)`,
@@ -49,7 +49,7 @@ export const generatePrecificacaoPdf = (certame: CertameComCalculo, fornecedores
         ];
     });
 
-    const totalCustoCompra = activeItems.reduce((acc, item) => acc + (item.custoUnitBase * item.qtd), 0);
+    const totalCustoCompra = activeItems.reduce((acc, item) => acc + ((item.metrics.custoBaseEstimadoUnit ?? item.custoUnitBase) * item.qtd), 0);
     const totalFrete = activeItems.reduce((acc, item) => acc + (item.freteUnitario * item.qtd), 0);
     const totalOverhead = activeItems.reduce((acc, item) => acc + (item.custoFixoRateadoUnit * item.qtd), 0);
     const totalImposto = activeItems.reduce((acc, item) => acc + (item.metrics.impostoUnit * item.qtd), 0);

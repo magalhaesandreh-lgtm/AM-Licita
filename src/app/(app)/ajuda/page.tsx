@@ -80,7 +80,7 @@ const faqItems = [
   {
     question: 'O que é "congelar cálculos" e quando usar?',
     answer:
-      'Congelar um certame trava todos os cálculos de precificação. Use isso após enviar sua proposta ou ganhar o certame para criar um "snapshot" (uma foto) dos preços e custos exatos daquele momento. Isso garante que seus relatórios e o cálculo do lucro real no empenho usem os valores históricos corretos, mesmo que você altere as configurações de margem ou custos fixos posteriormente. Nos certames abertos, a margem de lucro é calculada sobre o preço final (depois de custos, variáveis e impostos); os certames congelados mantêm a regra antiga, para que propostas já enviadas não mudem de valor.',
+      'Congelar um certame trava todos os cálculos de precificação. Use isso após enviar sua proposta ou ganhar o certame para criar um "snapshot" (uma foto) dos preços e custos exatos daquele momento. Isso garante que seus relatórios e o cálculo do lucro real no empenho usem os valores históricos corretos, mesmo que você altere as configurações de margem ou custos fixos posteriormente. Nos certames abertos, a margem de lucro é calculada sobre o preço final (depois de custos, variáveis e impostos); os certames congelados mantêm a regra antiga, para que propostas já enviadas não mudem de valor. Certames históricos (ganhos antes do sistema): marque "É Retroativo?", cadastre o item como GANHO com o preço vencedor e deixe o custo zerado. O sistema estima o custo, os impostos e o lucro a partir do preço, usando a margem da categoria (ou a margem manual do item), e identifica o item como ESTIMADO. Se informar o custo, o lucro passa a ser o real.',
   },
   {
     question: 'Como o lucro real é calculado?',
