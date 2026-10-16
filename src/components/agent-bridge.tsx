@@ -18,36 +18,11 @@ import { certidaoRepository } from '@/lib/repositories/certidao-repository';
 import { cobrancaRepository } from '@/lib/repositories/cobranca-repository';
 import { pendenciaRepository, type NovaPendencia } from '@/lib/repositories/pendencia-repository';
 import { eventRepository } from '@/lib/repositories/event-repository';
+import { montarResumo } from '@/lib/agent/resumo';
 
 export const PENDENCIAS_ALTERADAS = 'am:pendencias-alteradas';
 
 const avisar = () => window.dispatchEvent(new Event(PENDENCIAS_ALTERADAS));
-
-function hojeISO() {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-}
-
-function somarDias(iso: string, dias: number) {
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  d.setDate(d.getDate() + (dias || 0));
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-}
-
-function diasEntre(deISO: string, ateISO: string) {
-  return Math.round((new Date(`${ateISO}T00:00:00`).getTime() - new Date(`${deISO}T00:00:00`).getTime()) / 86400000);
-}
-
-function valorEmpenho(e: Empenho) {
-  return (e.itens || []).reduce((s, i) => s + (i.qtdEmpenhada || 0) * (i.precoVendaUnitSnapshot || 0), 0);
-}
-
-function valorNF(e: Empenho, nf: NotaFiscal) {
-  return (nf.itens || []).reduce((s, ni) => {
-    const item = (e.itens || []).find(i => i.id === ni.empenhoItemId);
-    return s + (ni.qtdNestaNF || 0) * (item?.precoVendaUnitSnapshot || 0);
-  }, 0);
-}
 
 function criarApi() {
   const pendencias = {
@@ -152,70 +127,20 @@ function criarApi() {
    * NFs a receber, certidões vencendo e pendências abertas.
    */
   const resumo = async (diasAlerta = 7) => {
-    const hoje = hojeISO();
-    const lista = await certameUnificadoRepository.list();
-    const entregas: any[] = [];
-    const aReceber: any[] = [];
-
-    for (const c of lista) {
+    const certames = await certameUnificadoRepository.list();
+    const empenhosPorCertame: Record<string, Empenho[] | undefined> = {};
+    for (const c of certames) {
       if (c.status === 'PERDIDO' || c.status === 'CANCELADO') continue;
-      let emps: Empenho[] = [];
       try {
-        emps = await empenhoRepository.list(c.id);
+        empenhosPorCertame[c.id] = await empenhoRepository.list(c.id);
       } catch {
-        continue;
-      }
-      for (const e of emps) {
-        const prazo = e.dataSolicitacaoISO ? somarDias(e.dataSolicitacaoISO, e.prazoEntregaDias) : null;
-        const saldoItens = (e.itens || []).filter(i => (i.qtdSaldo ?? i.qtdEmpenhada) > 0);
-        if (e.statusEntrega !== 'CONCLUIDO' && saldoItens.length) {
-          entregas.push({
-            certameId: c.id,
-            empenhoId: e.id,
-            orgao: e.orgao || c.orgao,
-            certame: `${c.modalidade} ${c.numeroAno}`,
-            numeroEmpenho: e.numeroEmpenho,
-            statusEntrega: e.statusEntrega,
-            prazoEntrega: prazo,
-            diasParaPrazo: prazo ? diasEntre(hoje, prazo) : null,
-            valorEmpenho: valorEmpenho(e),
-            itensComSaldo: saldoItens.map(i => ({ descricao: i.descricaoSnapshot, saldo: i.qtdSaldo ?? i.qtdEmpenhada, unidade: i.unidadeSnapshot })),
-          });
-        }
-        for (const nf of e.nfs || []) {
-          if (!nf.pago) {
-            aReceber.push({
-              certameId: c.id,
-              empenhoId: e.id,
-              nfId: nf.id,
-              orgao: e.orgao || c.orgao,
-              numeroEmpenho: e.numeroEmpenho,
-              numeroNF: nf.numeroNF,
-              dataNF: nf.dataNFISO,
-              diasDesdeNF: nf.dataNFISO ? diasEntre(nf.dataNFISO.slice(0, 10), hoje) : null,
-              valor: valorNF(e, nf),
-            });
-          }
-        }
+        /* sem acesso a este certame: é ignorado no resumo */
       }
     }
-
-    const certs = await certidaoRepository.list();
-    const certidoesVencendo = certs
-      .map(ct => ({ id: ct.id, empresa: ct.empresaNome, nome: ct.nome, vencimento: ct.dataVencimentoISO, dias: diasEntre(hoje, ct.dataVencimentoISO.slice(0, 10)) }))
-      .filter(ct => ct.dias <= diasAlerta * 2)
-      .sort((a, b) => a.dias - b.dias);
-
-    const pend = (await pendenciaRepository.list()).filter(p => p.status === 'ABERTA');
-
-    return {
-      hoje,
-      entregas: entregas.sort((a, b) => (a.diasParaPrazo ?? 9999) - (b.diasParaPrazo ?? 9999)),
-      aReceber: aReceber.sort((a, b) => (b.diasDesdeNF ?? 0) - (a.diasDesdeNF ?? 0)),
-      certidoesVencendo,
-      pendenciasAbertas: pend.length,
-      pendenciasVencidas: pend.filter(p => p.prazo && p.prazo.slice(0, 10) < hoje).length,
-    };
+    return montarResumo(
+      { certames, empenhosPorCertame, certidoes: await certidaoRepository.list(), pendencias: await pendenciaRepository.list() },
+      diasAlerta
+    );
   };
 
   return { versao: 2, pendencias, certames, empenhos, nfs, certidoes, cobrancas, resumo, exportar };
