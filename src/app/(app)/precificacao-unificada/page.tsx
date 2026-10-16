@@ -14,6 +14,9 @@ import { produtoRepository } from '@/lib/repositories/produto-repository';
 import { categoriaRepository } from '@/lib/repositories/categoria-repository';
 import { fornecedorRepository } from '@/lib/repositories/fornecedor-repository';
 import { clienteAssessoriaRepository } from '@/lib/repositories/cliente-assessoria-repository';
+import { configuracaoRepository } from '@/lib/repositories/configuracao-repository';
+import { custoFixoRepository } from '@/lib/repositories/custo-fixo-repository';
+import { custoVariavelRepository } from '@/lib/repositories/custo-variavel-repository';
 import { rateiosPercentuais, calculateCertamePricing, type CalculatedItemMetrics, type FullPricingContext, type CertameComCalculo } from '@/lib/pricing-calculator';
 import { CertameSelector } from './components/certame-selector';
 import { CertameHeader } from './components/certame-header';
@@ -54,24 +57,29 @@ export default function PrecificacaoUnificadaPage() {
         if (isUserLoading) return;
         if (!keepSelection) setIsLoading(true);
         try {
-            const [certamesData, produtosData, categoriasData, fornecedoresData, impostosData, clientesData] = await Promise.all([
+            const [certamesData, produtosData, categoriasData, fornecedoresData, impostosData, clientesData, configData, fixosData, variaveisData] = await Promise.all([
                 certameUnificadoRepository.list(),
                 produtoRepository.list(),
                 categoriaRepository.list(),
                 fornecedorRepository.list(),
                 impostoRepository.getSettings(),
                 clienteAssessoriaRepository.list(),
+                configuracaoRepository.get(),
+                custoFixoRepository.list(),
+                custoVariavelRepository.list(),
             ]);
             setProdutos(produtosData);
             setCategorias(categoriasData.filter(c => c.ativo));
             setFornecedores(fornecedoresData);
             setClientes(clientesData);
+            // Mesmas configurações usadas nas demais telas (relatórios, assessoria): frete, custos fixos,
+            // custos variáveis e impostos reais, e não valores fixos no código.
             const context: FullPricingContext = {
                 imposto: impostosData,
                 categorias: categoriasData,
-                configuracoes: { appName: 'AM Gestão', themeDefault: 'system', fretePadraoPercent: 5.0, faturamentoMensalPrevisto: 50000, metasControlamFaturamento: true, anexoProduto: 'I', aliquotaProduto: 4.5, anexoServico: 'III', aliquotaServico: 6.0 } as any,
-                custosFixos: [] as any,
-                custosVariaveis: [] as any,
+                configuracoes: configData,
+                custosFixos: fixosData,
+                custosVariaveis: variaveisData,
             };
             setPricingContext(context);
             const certamesFiltrados = clienteFiltroId ? certamesData.filter(c => c.empresaDestinoId === clienteFiltroId) : certamesData;

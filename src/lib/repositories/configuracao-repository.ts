@@ -16,11 +16,9 @@ class ConfiguracaoRepository {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: docRef.path, operation: 'get' }));
             throw error;
         });
-        if (docSnap.exists()) {
-            return docSnap.data() as ConfiguracoesGerais;
-        }
-        // Should be created by bootstrap script, but have a fallback
-        return {
+        // Campos ausentes no documento (ele também guarda o branding) caem no padrão, para que os
+        // cálculos de preço nunca recebam undefined/NaN.
+        const padrao: ConfiguracoesGerais = {
             appName: 'AM Gestão',
             themeDefault: 'system',
             fretePadraoPercent: 5.0,
@@ -31,6 +29,10 @@ class ConfiguracaoRepository {
             anexoServico: 'III',
             aliquotaServico: 6.0,
         };
+        if (!docSnap.exists()) return padrao;
+        const dados = docSnap.data() as Partial<ConfiguracoesGerais>;
+        const limpos = Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== undefined && v !== null));
+        return { ...padrao, ...limpos, overheadPercentManual: dados.overheadPercentManual ?? null };
     }
 
     async save(config: Partial<ConfiguracoesGerais>): Promise<void> {
