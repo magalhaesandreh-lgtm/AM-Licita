@@ -57,19 +57,22 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
         resolver: zodResolver(itemFormSchema),
         defaultValues: item
             ? { ...item, precoFinalVendidoReal: item.precoFinalVendidoReal ?? null, loteNumero: item.loteNumero ?? null }
-            : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: 4.5 }
+            : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: certame.isRetroativo ? 'GANHO' : 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: 4.5 }
     });
 
     React.useEffect(() => {
         if (open) {
             form.reset(item
                 ? { ...item, precoFinalVendidoReal: item.precoFinalVendidoReal ?? null, loteNumero: item.loteNumero ?? null }
-                : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: 4.5 });
+                : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: certame.isRetroativo ? 'GANHO' : 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: 4.5 });
         }
     }, [open, item, certame.itens, form]);
 
     const wt = form.watch('tipoItem');
     const ws = form.watch('status');
+    const wPreco = form.watch('precoFinalVendidoReal');
+    const wCusto = form.watch('custoUnitBase');
+    const vaiEstimar = ws === 'GANHO' && !!wPreco && wPreco > 0 && !(wCusto > 0);
 
     React.useEffect(() => {
         if (!impostoSettings) return;
@@ -114,6 +117,11 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
                                         <FormMessage />
                                     </FormItem>
                                 )} />
+                                {vaiEstimar && (
+                                    <p className="mt-2 text-sm text-amber-900">
+                                        Sem custo informado: o sistema vai estimar o custo, os impostos e o lucro a partir deste preço (margem da categoria ou margem manual, impostos e rateios atuais). Os valores aparecem como ESTIMADO. Quando souber o custo real, informe-o abaixo.
+                                    </p>
+                                )}
                             </CardContent>
                         </Card>
                     )}
@@ -190,7 +198,7 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
                         <FormItem><FormLabel>Quantidade*</FormLabel><FormControl><DecimalInput value={field.value} onChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="custoUnitBase" render={({ field }) => (
-                        <FormItem><FormLabel>Custo Unitário Base*</FormLabel><FormControl><CurrencyInput value={field.value} onChange={field.onChange} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Custo Unitário Base{ws === 'GANHO' && wPreco && wPreco > 0 ? ' (opcional: deixe zerado para estimar pelo preço vencedor)' : '*'}</FormLabel><FormControl><CurrencyInput value={field.value} onChange={field.onChange} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="margemManualPct" render={({ field }) => (
                         <FormItem><FormLabel>Margem Manual (%)</FormLabel><FormControl><PercentInput value={field.value} onChange={v => field.onChange(v === 0 ? null : v)} /></FormControl><FormMessage /></FormItem>
