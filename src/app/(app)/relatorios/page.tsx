@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { fornecedorRepository } from '@/lib/repositories/fornecedor-repository';
 import { clienteAssessoriaRepository } from '@/lib/repositories/cliente-assessoria-repository';
 import { useUser } from '@/firebase';
+import { custoUnitEfetivo } from '@/lib/custo-real';
 
 function KpiCard({label, value, className}: {label: string, value: string, className?: string}) {
     return (
@@ -118,7 +119,7 @@ export default function RelatoriosPage() {
                 if (empenhoItem && precificacaoItem) {
                     const aliquotaPct = precificacaoItem.aliquotaPct;
                     const itemVenda = empenhoItem.precoVendaUnitSnapshot * itemNF.qtdNestaNF;
-                    const itemCusto = empenhoItem.custoUnitSnapshot * itemNF.qtdNestaNF;
+                    const itemCusto = custoUnitEfetivo(empenhoItem) * itemNF.qtdNestaNF;
                     const itemImposto = itemVenda * (aliquotaPct / 100);
                     const itemLucro = itemVenda - itemImposto - itemCusto;
                     

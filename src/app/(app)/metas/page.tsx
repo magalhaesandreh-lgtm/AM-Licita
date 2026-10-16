@@ -36,6 +36,7 @@ import { formatCurrency, cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUser } from '@/firebase';
+import { custoUnitEfetivo } from '@/lib/custo-real';
 
 const metasSchema = z.object({
   salarioDesejado: z.number().min(0, 'O salário deve ser positivo.'),
@@ -308,7 +309,7 @@ function MetasRealTab() {
               if (empenhoItem && precificacaoItem) {
                 const aliquotaPct = precificacaoItem.aliquotaPct;
                 const itemFaturamento = empenhoItem.precoVendaUnitSnapshot * nfItem.qtdNestaNF;
-                const itemCusto = empenhoItem.custoUnitSnapshot * nfItem.qtdNestaNF;
+                const itemCusto = custoUnitEfetivo(empenhoItem) * nfItem.qtdNestaNF;
                 
                 const itemImposto = itemFaturamento * (aliquotaPct / 100);
                 const itemLucro = itemFaturamento - itemImposto - itemCusto;
@@ -455,7 +456,7 @@ function NFDetailModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: ()
                                 if (!empenhoItem) return null;
                                 
                                 const itemVenda = empenhoItem.precoVendaUnitSnapshot * nfItem.qtdNestaNF;
-                                const itemCusto = empenhoItem.custoUnitSnapshot * nfItem.qtdNestaNF;
+                                const itemCusto = custoUnitEfetivo(empenhoItem) * nfItem.qtdNestaNF;
                                 
                                 // Find original item to get tax rate
                                 const precificacaoItem = certame.itens.find(pi => pi.id === empenhoItem.precificacaoItemId);

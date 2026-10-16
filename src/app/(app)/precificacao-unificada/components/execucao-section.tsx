@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DataTable, type ColumnDef } from '@/components/data-table';
 import { cn, formatCurrency } from '@/lib/utils';
 import { empenhoRepository } from '@/lib/repositories/empenho-repository';
-import type { CertameComCalculo } from '@/lib/pricing-calculator';
+import type { CertameComCalculo, RateiosPercentuais } from '@/lib/pricing-calculator';
 import type { Empenho } from '@/lib/models';
 import { EmpenhoFormDialog } from './empenho-form-dialog';
 import { EmpenhoDetailDialog } from './empenho-detail-dialog';
@@ -18,11 +18,15 @@ import { EmpenhoDetailDialog } from './empenho-detail-dialog';
 interface ExecucaoSectionProps {
     certame: CertameComCalculo;
     onDataChange: () => void;
+    rateios: RateiosPercentuais;
+    fornecedoresCadastrados: string[];
 }
 
-export function ExecucaoSection({ certame, onDataChange }: ExecucaoSectionProps) {
+export function ExecucaoSection({ certame, onDataChange, rateios, fornecedoresCadastrados }: ExecucaoSectionProps) {
     const [isEmpenhoFormOpen, setIsEmpenhoFormOpen] = React.useState(false);
-    const [selectedEmpenho, setSelectedEmpenho] = React.useState<Empenho | null>(null);
+    // Guarda só o id: o empenho exibido vem sempre do certame recarregado (evita mostrar dados antigos depois de salvar).
+    const [selectedEmpenhoId, setSelectedEmpenhoId] = React.useState<string | null>(null);
+    const selectedEmpenho = certame.empenhos.find(e => e.id === selectedEmpenhoId) ?? null;
     const [editingEmpenho, setEditingEmpenho] = React.useState<Empenho | null>(null);
 
     const cols: ColumnDef<Empenho>[] = React.useMemo(() => [
@@ -39,7 +43,7 @@ export function ExecucaoSection({ certame, onDataChange }: ExecucaoSectionProps)
             <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setSelectedEmpenho(row)}><Info className="mr-2 h-4 w-4" /> Detalhes / Gerenciar</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSelectedEmpenhoId(row.id)}><Info className="mr-2 h-4 w-4" /> Detalhes / Gerenciar</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setEditingEmpenho(row)}><Pencil className="mr-2 h-4 w-4" /> Editar Empenho</DropdownMenuItem>
                     <DropdownMenuItem onClick={async () => { await empenhoRepository.delete(certame.id, row.id); onDataChange(); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Excluir</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -65,7 +69,7 @@ export function ExecucaoSection({ certame, onDataChange }: ExecucaoSectionProps)
             </CardContent>
             <EmpenhoFormDialog open={isEmpenhoFormOpen} onOpenChange={setIsEmpenhoFormOpen} certame={certame} onSuccess={onDataChange} />
             <EmpenhoFormDialog open={!!editingEmpenho} onOpenChange={(o) => { if (!o) setTimeout(() => setEditingEmpenho(null), 300); }} certame={certame} empenhoToEdit={editingEmpenho} onSuccess={onDataChange} />
-            <EmpenhoDetailDialog open={!!selectedEmpenho} onOpenChange={(o) => { if (!o) setTimeout(() => setSelectedEmpenho(null), 300); }} certame={certame} empenho={selectedEmpenho} onDataChange={onDataChange} />
+            <EmpenhoDetailDialog open={!!selectedEmpenho} onOpenChange={(o) => { if (!o) setTimeout(() => setSelectedEmpenhoId(null), 300); }} certame={certame} empenho={selectedEmpenho} onDataChange={onDataChange} rateios={rateios} fornecedoresCadastrados={fornecedoresCadastrados} />
         </Card>
     );
 }
