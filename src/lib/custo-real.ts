@@ -10,12 +10,23 @@ export const COMO_COMPROU_LABEL: Record<NonNullable<CompraReal['comoComprou']>, 
   OUTRO: 'Outro',
 };
 
-export type SituacaoCustoReal = 'SEM_COMPRA' | 'OK' | 'ABAIXO_PREVISTO' | 'PREJUIZO';
+export type SituacaoCustoReal = 'SEM_COMPRA' | 'ESTIMADO_NF' | 'OK' | 'ABAIXO_PREVISTO' | 'PREJUIZO';
 
 export interface ResumoCustoRealItem {
+  /** Quantidade com compra real lançada. */
   qtdComprada: number;
-  /** Quanto ainda falta comprar para cobrir o empenho (nunca negativo). */
+  /** Quantidade já faturada em NFs (deduz do empenho). */
+  qtdFaturada: number;
+  /** Faturado sem compra real lançada: entra com o custo previsto da ATA. */
+  qtdEstimadaNF: number;
+  /** Comprado real + estimado pela NF (nunca passa do que já foi coberto). */
+  qtdCoberta: number;
+  /** Quanto ainda falta comprar/faturar para cobrir o empenho (nunca negativo). */
   saldoComprar: number;
+  /** Custo unitário usado no lucro: mistura do custo real (compras) com o previsto (parte faturada sem compra). */
+  custoEfetivoUnit: number;
+  lucroEfetivoUnit: number;
+  margemEfetivaPct: number | null;
   /** Média ponderada pela quantidade das compras lançadas. */
   custoMedioUnit: number | null;
   /** Custo médio + frete e rateios (mesmos percentuais usados na precificação). */
@@ -44,26 +55,43 @@ export function resumoCustoRealItem(
 ): ResumoCustoRealItem {
   const doItem = comprasDoItem(compras, item.id);
   const qtdComprada = doItem.reduce((a, c) => a + (c.qtd || 0), 0);
-  const saldoComprar = Math.max(0, r4(item.qtdEmpenhada - qtdComprada));
+  const qtdFaturada = item.qtdEntregue || 0;
+  const qtdEstimadaNF = Math.max(0, r4(qtdFaturada - qtdComprada));
+  const qtdCoberta = r4(qtdComprada + qtdEstimadaNF);
+  const saldoComprar = Math.max(0, r4(item.qtdEmpenhada - qtdCoberta));
   const impostoUnit = item.precoVendaUnitSnapshot * (aliquotaPct / 100);
-  const base = { qtdComprada, saldoComprar, impostoUnit, lucroPrevistoUnit: item.lucroUnitSnapshot };
+  const preco = item.precoVendaUnitSnapshot;
+  const base = { qtdComprada, qtdFaturada, qtdEstimadaNF, qtdCoberta, saldoComprar, impostoUnit, lucroPrevistoUnit: item.lucroUnitSnapshot };
 
   if (qtdComprada <= 0) {
-    return { ...base, custoMedioUnit: null, custoTotalRealUnit: null, lucroRealUnit: null, margemRealPct: null, diferencaLucroUnit: null, situacao: 'SEM_COMPRA' };
+    const lucroEfetivoUnit = r4(preco - impostoUnit - item.custoUnitSnapshot);
+    return {
+      ...base,
+      custoEfetivoUnit: item.custoUnitSnapshot, lucroEfetivoUnit,
+      margemEfetivaPct: preco > 0 ? (lucroEfetivoUnit / preco) * 100 : null,
+      custoMedioUnit: null, custoTotalRealUnit: null, lucroRealUnit: null, margemRealPct: null, diferencaLucroUnit: null,
+      situacao: qtdFaturada > 0 ? 'ESTIMADO_NF' : 'SEM_COMPRA',
+    };
   }
   const custoMedioUnit = r4(doItem.reduce((a, c) => a + c.qtd * c.custoUnit, 0) / qtdComprada);
   const fator = 1 + rateios.fretePct + rateios.overheadPct + rateios.variavelPct;
   const custoTotalRealUnit = r4(custoMedioUnit * fator);
-  const lucroRealUnit = r4(item.precoVendaUnitSnapshot - impostoUnit - custoTotalRealUnit);
-  const margemRealPct = item.precoVendaUnitSnapshot > 0 ? (lucroRealUnit / item.precoVendaUnitSnapshot) * 100 : null;
-  const diferencaLucroUnit = r4(lucroRealUnit - item.lucroUnitSnapshot);
+  const lucroRealUnit = r4(preco - impostoUnit - custoTotalRealUnit);
+  const margemRealPct = preco > 0 ? (lucroRealUnit / preco) * 100 : null;
+  const custoEfetivoUnit = custoUnitEfetivo({ custoUnitSnapshot: item.custoUnitSnapshot, custoRealUnit: custoTotalRealUnit, qtdCompradaReal: qtdComprada, qtdEntregue: qtdFaturada });
+  const lucroEfetivoUnit = r4(preco - impostoUnit - custoEfetivoUnit);
+  const diferencaLucroUnit = r4(lucroEfetivoUnit - item.lucroUnitSnapshot);
   let situacao: SituacaoCustoReal = 'OK';
-  if (lucroRealUnit < -EPS) situacao = 'PREJUIZO';
+  if (lucroEfetivoUnit < -EPS) situacao = 'PREJUIZO';
   else if (diferencaLucroUnit < -EPS) situacao = 'ABAIXO_PREVISTO';
-  return { ...base, custoMedioUnit, custoTotalRealUnit, lucroRealUnit, margemRealPct, diferencaLucroUnit, situacao };
+  return {
+    ...base, custoEfetivoUnit, lucroEfetivoUnit,
+    margemEfetivaPct: preco > 0 ? (lucroEfetivoUnit / preco) * 100 : null,
+    custoMedioUnit, custoTotalRealUnit, lucroRealUnit, margemRealPct, diferencaLucroUnit, situacao,
+  };
 }
 
-/** Grava (ou remove) o custo real unitário em cada item do empenho conforme as compras lançadas. */
+/** Grava (ou remove) o custo real unitário e a quantidade com compra real em cada item do empenho. */
 export function aplicarCustoReal(
   itens: EmpenhoItem[],
   compras: CompraReal[] | undefined,
@@ -71,15 +99,29 @@ export function aplicarCustoReal(
   rateios: RateiosPercentuais,
 ): EmpenhoItem[] {
   return itens.map(it => {
-    const { custoRealUnit: _antigo, ...semCusto } = it;
+    const { custoRealUnit: _antigo, qtdCompradaReal: _antigaQtd, ...semCusto } = it;
     const r = resumoCustoRealItem(it, compras, aliquotaDoItem(it.precificacaoItemId), rateios);
-    return r.custoTotalRealUnit != null ? { ...semCusto, custoRealUnit: r.custoTotalRealUnit } : semCusto;
+    return r.custoTotalRealUnit != null
+      ? { ...semCusto, custoRealUnit: r.custoTotalRealUnit, qtdCompradaReal: r.qtdComprada }
+      : semCusto;
   });
 }
 
-/** Custo unitário que vale para o lucro: o real, quando há compras; senão o previsto na precificação. */
-export function custoUnitEfetivo(item: Pick<EmpenhoItem, 'custoUnitSnapshot' | 'custoRealUnit'>): number {
-  return item.custoRealUnit ?? item.custoUnitSnapshot;
+/**
+ * Custo unitário que vale para o lucro das NFs.
+ * - Sem compra real lançada: o previsto na precificação (ATA).
+ * - Com compra real: o custo real; se foi faturado mais do que o comprado, a parte sem compra entra com o previsto (média ponderada).
+ */
+export function custoUnitEfetivo(
+  item: Pick<EmpenhoItem, 'custoUnitSnapshot' | 'custoRealUnit' | 'qtdEntregue'> & { qtdCompradaReal?: number },
+): number {
+  if (item.custoRealUnit == null) return item.custoUnitSnapshot;
+  // Itens gravados antes de existir qtdCompradaReal: trata como todo comprado (comportamento anterior).
+  const real = item.qtdCompradaReal ?? Number.POSITIVE_INFINITY;
+  const fat = item.qtdEntregue || 0;
+  const est = Math.max(0, fat - real);
+  if (est <= 0) return item.custoRealUnit;
+  return r4((real * item.custoRealUnit + est * item.custoUnitSnapshot) / (real + est));
 }
 
 /** Erro de validação de uma compra (null = válida). `qtdJaComprada` não deve incluir a própria compra, se for edição. */
@@ -90,46 +132,4 @@ export function validarCompra(c: { qtd: number; custoUnit: number; fornecedor: s
   const saldo = r4(item.qtdEmpenhada - qtdJaComprada);
   if (c.qtd > saldo + 1e-9) return `A quantidade passa do saldo a comprar deste item (${saldo}).`;
   return null;
-}
-
-export type OrigemCusto = 'REAL' | 'PREVISTO';
-
-export interface ResultadoNFsItem {
-  /** Quantidade deste item já faturada em NFs. */
-  qtdFaturada: number;
-  /** Custo unitário usado: o real, se houver compras lançadas; senão o previsto, como está na ATA/precificação. */
-  custoUnitUsado: number;
-  origem: OrigemCusto;
-  /** Faturou mais do que comprou: a parte sem compra lançada usa o custo médio das compras. */
-  faturadoAcimaDoComprado: boolean;
-  venda: number;
-  imposto: number;
-  custo: number;
-  lucro: number;
-  margemPct: number | null;
-}
-
-/** Resultado (venda, imposto, custo, lucro) do que já foi faturado em NFs de um item, com o custo efetivo. */
-export function resultadoNFsItem(
-  item: EmpenhoItem,
-  nfs: Array<{ itens: Array<{ empenhoItemId: string; qtdNestaNF: number }> }> | undefined,
-  aliquotaPct: number,
-  qtdComprada = 0,
-): ResultadoNFsItem {
-  const qtdFaturada = (nfs || []).reduce(
-    (acc, nf) => acc + nf.itens.filter(i => i.empenhoItemId === item.id).reduce((a, i) => a + (i.qtdNestaNF || 0), 0),
-    0,
-  );
-  const origem: OrigemCusto = item.custoRealUnit != null ? 'REAL' : 'PREVISTO';
-  const custoUnitUsado = custoUnitEfetivo(item);
-  const venda = item.precoVendaUnitSnapshot * qtdFaturada;
-  const imposto = venda * (aliquotaPct / 100);
-  const custo = custoUnitUsado * qtdFaturada;
-  const lucro = venda - imposto - custo;
-  return {
-    qtdFaturada, custoUnitUsado, origem,
-    faturadoAcimaDoComprado: origem === 'REAL' && qtdFaturada > qtdComprada + 1e-9,
-    venda, imposto, custo, lucro,
-    margemPct: venda > 0 ? (lucro / venda) * 100 : null,
-  };
 }
