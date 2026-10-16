@@ -346,3 +346,34 @@ export interface Pendencia extends BaseEntity {
   resolucao?: string;           // Como foi resolvida
   resolvidaEm?: string | null;  // ISO
 }
+
+
+// ===============================================================
+// Precificação da assessoria (serviços prestados aos clientes)
+// ===============================================================
+export interface PrecificacaoAssessoria extends BaseEntity {
+  /** Vazio quando for proposta avulsa para um cliente ainda não cadastrado. */
+  clienteId?: string | null;
+  clienteNome: string;
+  clienteCnpj?: string;
+  titulo: string;
+  tipoCobranca: 'MENSAL' | 'POR_PROCESSO';
+  /** Meses do contrato (mensal) ou 1 (por processo). */
+  periodos: number;
+  linhas: { id: string; descricao: string; tipo: 'HORAS' | 'VALOR'; quantidade: number; valorUnitario: number }[];
+  overheadPercent: number;
+  variavelPercent: number;
+  impostoPercent: number;
+  margemPercent: number;
+  /** Valor do empenho estimado, para comparar com o modelo de êxito. */
+  valorEmpenhoEstimado?: number;
+  modeloExito?: 'NENHUM' | 'EXITO' | 'HIBRIDO';
+  escopo?: string;
+  validadeDias?: number;
+  observacoes?: string;
+  /** Preço do período calculado no momento em que foi salvo. */
+  precoRecomendado: number;
+  /** Preço efetivamente proposto (pode diferir do recomendado). */
+  precoProposto: number;
+  status: 'RASCUNHO' | 'ENVIADA' | 'APROVADA' | 'RECUSADA';
+}

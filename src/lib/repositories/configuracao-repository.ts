@@ -1,6 +1,6 @@
 'use client';
 
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from '@/firebase/firestore-instance';
 import type { ConfiguracoesGerais } from '@/lib/models';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -35,7 +35,7 @@ class ConfiguracaoRepository {
 
     async save(config: Partial<ConfiguracoesGerais>): Promise<void> {
         const docRef = this.getDocRef();
-        await updateDoc(docRef, config);
+        await setDoc(docRef, config, { merge: true });
     }
 }
 
