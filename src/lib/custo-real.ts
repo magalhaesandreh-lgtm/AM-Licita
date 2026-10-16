@@ -91,3 +91,45 @@ export function validarCompra(c: { qtd: number; custoUnit: number; fornecedor: s
   if (c.qtd > saldo + 1e-9) return `A quantidade passa do saldo a comprar deste item (${saldo}).`;
   return null;
 }
+
+export type OrigemCusto = 'REAL' | 'PREVISTO';
+
+export interface ResultadoNFsItem {
+  /** Quantidade deste item já faturada em NFs. */
+  qtdFaturada: number;
+  /** Custo unitário usado: o real, se houver compras lançadas; senão o previsto, como está na ATA/precificação. */
+  custoUnitUsado: number;
+  origem: OrigemCusto;
+  /** Faturou mais do que comprou: a parte sem compra lançada usa o custo médio das compras. */
+  faturadoAcimaDoComprado: boolean;
+  venda: number;
+  imposto: number;
+  custo: number;
+  lucro: number;
+  margemPct: number | null;
+}
+
+/** Resultado (venda, imposto, custo, lucro) do que já foi faturado em NFs de um item, com o custo efetivo. */
+export function resultadoNFsItem(
+  item: EmpenhoItem,
+  nfs: Array<{ itens: Array<{ empenhoItemId: string; qtdNestaNF: number }> }> | undefined,
+  aliquotaPct: number,
+  qtdComprada = 0,
+): ResultadoNFsItem {
+  const qtdFaturada = (nfs || []).reduce(
+    (acc, nf) => acc + nf.itens.filter(i => i.empenhoItemId === item.id).reduce((a, i) => a + (i.qtdNestaNF || 0), 0),
+    0,
+  );
+  const origem: OrigemCusto = item.custoRealUnit != null ? 'REAL' : 'PREVISTO';
+  const custoUnitUsado = custoUnitEfetivo(item);
+  const venda = item.precoVendaUnitSnapshot * qtdFaturada;
+  const imposto = venda * (aliquotaPct / 100);
+  const custo = custoUnitUsado * qtdFaturada;
+  const lucro = venda - imposto - custo;
+  return {
+    qtdFaturada, custoUnitUsado, origem,
+    faturadoAcimaDoComprado: origem === 'REAL' && qtdFaturada > qtdComprada + 1e-9,
+    venda, imposto, custo, lucro,
+    margemPct: venda > 0 ? (lucro / venda) * 100 : null,
+  };
+}

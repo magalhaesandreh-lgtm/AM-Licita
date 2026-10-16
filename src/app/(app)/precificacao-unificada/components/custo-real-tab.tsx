@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { cn, formatCurrency } from '@/lib/utils';
 import { empenhoRepository } from '@/lib/repositories/empenho-repository';
-import { COMO_COMPROU_LABEL, aplicarCustoReal, resumoCustoRealItem, type ResumoCustoRealItem } from '@/lib/custo-real';
+import { COMO_COMPROU_LABEL, aplicarCustoReal, resumoCustoRealItem, type ResumoCustoRealItem, resultadoNFsItem, type ResultadoNFsItem } from '@/lib/custo-real';
 import type { RateiosPercentuais } from '@/lib/pricing-calculator';
 import type { CompraReal, Empenho, EmpenhoItem } from '@/lib/models';
 import { CompraRealDialog } from './compra-real-dialog';
@@ -62,6 +62,19 @@ export function CustoRealTab({ certameId, empenho, certameItens, rateios, fornec
         return { totalComprado, lucroReal, lucroPrevisto, prejuizo, abaixo, semCompra, diferenca: lucroReal - lucroPrevisto };
     }, [linhas, compras]);
 
+    const resultadoNFs = React.useMemo(() => {
+        const linhasNF = linhas.map(l => ({ ...l, n: resultadoNFsItem(l, empenho.nfs, aliquotaDoItem(l.precificacaoItemId), l.r.qtdComprada) })).filter(l => l.n.qtdFaturada > 0);
+        const soma = (f: (x: ResultadoNFsItem) => number, origem?: 'REAL' | 'PREVISTO') => linhasNF.filter(l => !origem || l.n.origem === origem).reduce((a, l) => a + f(l.n), 0);
+        return {
+            linhasNF,
+            faturado: soma(n => n.venda),
+            lucro: soma(n => n.lucro),
+            lucroReal: soma(n => n.lucro, 'REAL'),
+            lucroPrevisto: soma(n => n.lucro, 'PREVISTO'),
+            itensPrevisto: linhasNF.filter(l => l.n.origem === 'PREVISTO').length,
+        };
+    }, [linhas, empenho.nfs, aliquotaDoItem]);
+
     const sugestoes = React.useMemo(
         () => Array.from(new Set([...fornecedoresCadastrados, ...compras.map(c => c.fornecedor)].filter(Boolean))).sort((a, b) => a.localeCompare(b)),
         [fornecedoresCadastrados, compras],
@@ -90,6 +103,19 @@ export function CustoRealTab({ certameId, empenho, certameItens, rateios, fornec
         { id: 'acao', header: '', align: 'right', cell: (row) => (
             <Button variant="outline" size="sm" onClick={() => abrirNova(row.id)} disabled={row.r.saldoComprar <= 0}><PlusCircle className="mr-1 h-4 w-4" /> Compra</Button>
         ) },
+    ];
+
+    type LinhaNF = (typeof resultadoNFs.linhasNF)[number];
+    const colsNFs: ColumnDef<LinhaNF>[] = [
+        { accessorKey: 'descricaoSnapshot', header: 'Item', cell: (row) => <span className="block max-w-[260px] truncate font-medium" title={row.descricaoSnapshot}>{row.descricaoSnapshot}</span> },
+        { id: 'qf', header: 'Qtd faturada', align: 'right', cell: (row) => <span className="tabular-nums">{row.n.qtdFaturada}</span> },
+        { id: 'cu', header: 'Custo unit. usado', align: 'right', cell: (row) => <span className="tabular-nums">{formatCurrency(row.n.custoUnitUsado)}</span> },
+        { id: 'or', header: 'Origem do custo', cell: (row) => row.n.origem === 'REAL'
+            ? <Badge className="whitespace-nowrap bg-green-100 text-green-800 hover:bg-green-100" title={row.n.faturadoAcimaDoComprado ? 'Faturou mais do que o comprado: o restante usa o custo médio das compras' : undefined}>Custo real{row.n.faturadoAcimaDoComprado ? ' (parcial)' : ''}</Badge>
+            : <Badge variant="outline" className="whitespace-nowrap text-muted-foreground" title="Sem compra lançada: usando o custo da ATA / precificação">Previsto (ATA)</Badge> },
+        { id: 'vd', header: 'Venda', align: 'right', cell: (row) => <span className="tabular-nums">{formatCurrency(row.n.venda)}</span> },
+        { id: 'lc', header: 'Lucro nas NFs', align: 'right', cell: (row) => <span className={cn('tabular-nums font-semibold', row.n.lucro < 0 && 'text-destructive')}>{formatCurrency(row.n.lucro)}</span> },
+        { id: 'mg', header: 'Margem', align: 'right', cell: (row) => <span className="tabular-nums">{row.n.margemPct != null ? `${row.n.margemPct.toFixed(2)}%` : '-'}</span> },
     ];
 
     const nomeItem = (id: string) => empenho.itens.find(i => i.id === id)?.descricaoSnapshot ?? '-';
@@ -128,6 +154,20 @@ export function CustoRealTab({ certameId, empenho, certameItens, rateios, fornec
                     <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Diferença</p><p className={cn('flex items-center gap-1 text-lg font-bold', kpis.diferenca < 0 ? 'text-destructive' : 'text-green-600')}>{kpis.diferenca < 0 ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}{formatCurrency(kpis.diferenca)}</p></div>
                     <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Sem compra ainda</p><p className="text-lg font-bold text-amber-600">{kpis.semCompra}</p></div>
                 </div>
+            </div>
+
+            <div>
+                <h3 className="mb-1 text-sm font-semibold">Resultado das NFs lançadas</h3>
+                <p className="mb-2 text-xs text-muted-foreground">
+                    O lucro de cada NF usa o custo real quando o item já tem compras lançadas. Sem compra, o sistema usa o custo previsto da ATA (precificação), então o lucro já aparece assim que a NF é lançada e vai se ajustando conforme você registra as compras.
+                </p>
+                <div className="mb-3 grid w-full grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-muted/10 p-4 md:grid-cols-4">
+                    <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Faturado nas NFs</p><p className="text-lg font-bold">{formatCurrency(resultadoNFs.faturado)}</p></div>
+                    <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Lucro nas NFs</p><p className={cn('text-lg font-bold', resultadoNFs.lucro < 0 ? 'text-destructive' : 'text-green-600')}>{formatCurrency(resultadoNFs.lucro)}</p></div>
+                    <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Com custo real</p><p className="text-lg font-bold">{formatCurrency(resultadoNFs.lucroReal)}</p></div>
+                    <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Com custo previsto (ATA)</p><p className="text-lg font-bold text-amber-600">{formatCurrency(resultadoNFs.lucroPrevisto)}</p></div>
+                </div>
+                <div className="w-full max-w-full overflow-x-auto rounded-md border"><DataTable columns={colsNFs} data={resultadoNFs.linhasNF} emptyStateMessage="Nenhuma NF lançada para este empenho ainda." /></div>
             </div>
 
             {alertas.length > 0 && (
