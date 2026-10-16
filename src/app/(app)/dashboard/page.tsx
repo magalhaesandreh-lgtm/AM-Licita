@@ -43,6 +43,7 @@ import { metasRepository } from '@/lib/repositories/metas-repository';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 import { useUser } from '@/firebase';
+import { custoUnitEfetivo } from '@/lib/custo-real';
 
 // #region Helper Types & Interfaces
 type AugmentedNF = NotaFiscal & { certame: CertameUnificado; empenho: Empenho; nfTotalVenda: number; nfLucro: number; nfTotalImpostos: number };
@@ -121,7 +122,7 @@ export default function DashboardPage() {
            if (empenhoItem && precificacaoItem) {
              const aliquotaPct = precificacaoItem.aliquotaPct;
              const itemVenda = empenhoItem.precoVendaUnitSnapshot * nfItem.qtdNestaNF;
-             const itemCusto = empenhoItem.custoUnitSnapshot * nfItem.qtdNestaNF;
+             const itemCusto = custoUnitEfetivo(empenhoItem) * nfItem.qtdNestaNF;
              
              // Recalculate tax and profit from reliable snapshots and original item data
              const itemImposto = itemVenda * (aliquotaPct / 100);
@@ -378,7 +379,7 @@ function NFDetailModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: ()
                                 if (!empenhoItem) return null;
                                 
                                 const itemVenda = empenhoItem.precoVendaUnitSnapshot * nfItem.qtdNestaNF;
-                                const itemCusto = empenhoItem.custoUnitSnapshot * nfItem.qtdNestaNF;
+                                const itemCusto = custoUnitEfetivo(empenhoItem) * nfItem.qtdNestaNF;
                                 
                                 // Find original item to get tax rate
                                 const precificacaoItem = nf.certame.itens.find(pi => pi.id === empenhoItem.precificacaoItemId);
