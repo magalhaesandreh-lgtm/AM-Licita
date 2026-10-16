@@ -125,6 +125,8 @@ export interface EmpenhoItem {
      * lançadas no módulo de custo real. Quando existe, substitui custoUnitSnapshot nos lucros e relatórios.
      */
     custoRealUnit?: number;
+    /** Quantidade com compra real lançada (gravada junto com custoRealUnit). O que foi faturado além disso usa o custo previsto da ATA. */
+    qtdCompradaReal?: number;
     qtdEmpenhada: number;
     qtdEntregue: number;
     qtdSaldo: number;
