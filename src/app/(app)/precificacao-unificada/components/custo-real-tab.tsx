@@ -116,7 +116,10 @@ export function CustoRealTab({ certameId, empenho, certameItens, rateios, fornec
     const alertas = linhas.filter(l => l.r.situacao === 'PREJUIZO' || l.r.situacao === 'ABAIXO_PREVISTO');
 
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 max-w-full flex-col gap-4">
+            <div className="flex justify-end">
+                <Button size="sm" onClick={() => abrirNova(null)} disabled={empenho.itens.length === 0}><PlusCircle className="mr-2 h-4 w-4" /> Registrar compra</Button>
+            </div>
             <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-dashed bg-muted/10 p-4 md:flex-row md:items-center">
                 <div className="grid w-full grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-5">
                     <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Total comprado</p><p className="text-lg font-bold">{formatCurrency(kpis.totalComprado)}</p></div>
@@ -125,7 +128,6 @@ export function CustoRealTab({ certameId, empenho, certameItens, rateios, fornec
                     <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Diferença</p><p className={cn('flex items-center gap-1 text-lg font-bold', kpis.diferenca < 0 ? 'text-destructive' : 'text-green-600')}>{kpis.diferenca < 0 ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}{formatCurrency(kpis.diferenca)}</p></div>
                     <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Sem compra ainda</p><p className="text-lg font-bold text-amber-600">{kpis.semCompra}</p></div>
                 </div>
-                <Button size="sm" className="shrink-0" onClick={() => abrirNova(null)} disabled={empenho.itens.length === 0}><PlusCircle className="mr-2 h-4 w-4" /> Registrar compra</Button>
             </div>
 
             {alertas.length > 0 && (
@@ -150,12 +152,12 @@ export function CustoRealTab({ certameId, empenho, certameItens, rateios, fornec
                 <p className="mb-2 text-xs text-muted-foreground">
                     Custo real total = custo médio das compras (ponderado pela quantidade) + frete e rateios, com os mesmos percentuais da precificação. O imposto usa a alíquota do item. O lucro real dos itens comprados passa a valer no painel e nos relatórios no lugar do previsto.
                 </p>
-                <div className="overflow-x-auto rounded-md border"><DataTable columns={colsItens} data={linhas} emptyStateMessage="Importe os itens do empenho para registrar as compras." /></div>
+                <div className="w-full max-w-full overflow-x-auto rounded-md border"><DataTable columns={colsItens} data={linhas} emptyStateMessage="Importe os itens do empenho para registrar as compras." /></div>
             </div>
 
             <div>
                 <h3 className="mb-2 text-sm font-semibold">Histórico de compras</h3>
-                <div className="overflow-x-auto rounded-md border"><DataTable columns={colsCompras} data={comprasOrdenadas} emptyStateMessage="Nenhuma compra registrada ainda." /></div>
+                <div className="w-full max-w-full overflow-x-auto rounded-md border"><DataTable columns={colsCompras} data={comprasOrdenadas} emptyStateMessage="Nenhuma compra registrada ainda." /></div>
             </div>
 
             <CompraRealDialog

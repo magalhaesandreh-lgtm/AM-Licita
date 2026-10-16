@@ -92,11 +92,11 @@ export function EmpenhoDetailDialog({ open, onOpenChange, certame, empenho: inco
                                 </ScrollArea>
                             </TabsContent>
                             <TabsContent value="custo-real" className="h-full data-[state=active]:flex flex-col m-0">
-                                <ScrollArea className="flex-1 min-h-0">
-                                    <div className="p-6 min-h-[500px]">
+                                <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
+                                    <div className="p-6 min-h-[500px] w-full min-w-0 max-w-full">
                                         <CustoRealTab certameId={certame.id} empenho={empenho} certameItens={certame.itens} rateios={rateios} fornecedoresCadastrados={fornecedoresCadastrados} onDataChange={onDataChange} />
                                     </div>
-                                </ScrollArea>
+                                </div>
                             </TabsContent>
                             <TabsContent value="info" className="h-full data-[state=active]:flex flex-col m-0">
                                 <ScrollArea className="h-full">
