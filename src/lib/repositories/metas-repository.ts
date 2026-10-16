@@ -1,6 +1,6 @@
 'use client';
 
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from '@/firebase/firestore-instance';
 import type { MetasConfig } from '@/lib/models';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -19,9 +19,9 @@ class MetasRepository {
         if (docSnap.exists()) {
             const data = docSnap.data();
             return {
-                salarioDesejado: data.salarioDesejado || 5000,
-                lucroAlvoEmpresa: data.lucroAlvoEmpresa || 10000,
-                lucroMedioPercentManual: data.lucroMedioPercentManual || 15.0,
+                salarioDesejado: data.salarioDesejado ?? 5000,
+                lucroAlvoEmpresa: data.lucroAlvoEmpresa ?? 10000,
+                lucroMedioPercentManual: data.lucroMedioPercentManual ?? 15.0,
             };
         }
         // Default values
@@ -34,7 +34,7 @@ class MetasRepository {
 
     async save(metas: Partial<MetasConfig>): Promise<void> {
         const docRef = this.getDocRef();
-        await updateDoc(docRef, metas);
+        await setDoc(docRef, metas, { merge: true });
     }
 }
 

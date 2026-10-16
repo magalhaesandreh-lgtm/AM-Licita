@@ -104,14 +104,17 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                     } else {
                         // Profile DOES NOT EXIST.
                         try {
+                            const isAdminPrincipal = firebaseUser.email === 'magalhaesandreh@gmail.com';
                             const userName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Novo Usuário';
                             const newProfileData: Omit<Profile, 'uid'> = {
                                 id: firebaseUser.uid,
                                 nome: userName,
                                 displayName: userName,
                                 email: firebaseUser.email!,
-                                role: 'user',
-                                ativo: true,
+                                // Cadastro novo aguarda aprovação do administrador (firestore.rules).
+                                // O e-mail do administrador principal entra já liberado.
+                                role: isAdminPrincipal ? 'admin' : 'user',
+                                ativo: isAdminPrincipal,
                                 createdAt: serverTimestamp(),
                                 updatedAt: serverTimestamp(),
                             };
