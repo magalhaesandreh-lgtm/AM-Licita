@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { CertameUnificado } from '@/lib/models';
 import type { CertameComCalculo } from '@/lib/pricing-calculator';
+import { custoUnitEfetivo } from '@/lib/custo-real';
 
 interface CertameHeaderProps {
     certame: CertameComCalculo;
@@ -39,7 +40,7 @@ export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProp
                     if (ei) {
                         const pi = certame.itens.find(p => p.id === ei.precificacaoItemId);
                         const vItem = ei.precoVendaUnitSnapshot * itemNF.qtdNestaNF;
-                        const cItem = ei.custoUnitSnapshot * itemNF.qtdNestaNF;
+                        const cItem = custoUnitEfetivo(ei) * itemNF.qtdNestaNF;
                         const iItem = vItem * ((pi?.aliquotaPct ?? 0) / 100);
                         ts.v += vItem; ts.l += (vItem - iItem - cItem);
                     }

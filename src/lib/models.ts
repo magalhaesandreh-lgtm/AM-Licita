@@ -90,6 +90,26 @@ export interface Empenho extends BaseEntity {
     statusFinanceiro: 'PENDENTE' | 'FATURADO' | 'PARCIAL' | 'PAGO';
     itens: EmpenhoItem[];
     nfs: NotaFiscal[];
+    /** Compras reais feitas para atender os itens deste empenho (histórico de custo, fornecedor, marca). */
+    comprasReais?: CompraReal[];
+}
+
+export type ComoComprou = 'PRESENCIAL' | 'SITE_MARKETPLACE' | 'WHATSAPP_TELEFONE' | 'DISTRIBUIDOR' | 'FABRICANTE' | 'OUTRO';
+
+export interface CompraReal {
+    id: string;
+    empenhoItemId: string;
+    dataCompraISO: string;
+    qtd: number;
+    /** Custo unitário pago ao fornecedor (sem frete e rateios, que o sistema aplica). */
+    custoUnit: number;
+    fornecedor: string;
+    marca?: string;
+    comoComprou?: ComoComprou;
+    /** Nº da nota/pedido de compra */
+    documento?: string;
+    observacoes?: string;
+    registradoEm: string;
 }
 
 export interface EmpenhoItem {
@@ -100,6 +120,11 @@ export interface EmpenhoItem {
     precoVendaUnitSnapshot: number;
     custoUnitSnapshot: number;
     lucroUnitSnapshot: number;
+    /**
+     * Custo unitário total REAL (custo médio das compras + frete e rateios), gravado quando há compras
+     * lançadas no módulo de custo real. Quando existe, substitui custoUnitSnapshot nos lucros e relatórios.
+     */
+    custoRealUnit?: number;
     qtdEmpenhada: number;
     qtdEntregue: number;
     qtdSaldo: number;

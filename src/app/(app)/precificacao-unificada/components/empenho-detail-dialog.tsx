@@ -17,6 +17,8 @@ import type { CertameComCalculo } from '@/lib/pricing-calculator';
 import type { Empenho, EmpenhoItem, NotaFiscal } from '@/lib/models';
 import { ImportarItensDialog } from './importar-itens-dialog';
 import { NotaFiscalDialog } from './nota-fiscal-dialog';
+import { CustoRealTab } from './custo-real-tab';
+import type { RateiosPercentuais } from '@/lib/pricing-calculator';
 
 interface EmpenhoDetailDialogProps {
     open: boolean;
@@ -24,9 +26,11 @@ interface EmpenhoDetailDialogProps {
     certame: CertameComCalculo;
     empenho: Empenho | null;
     onDataChange: () => void;
+    rateios: RateiosPercentuais;
+    fornecedoresCadastrados: string[];
 }
 
-export function EmpenhoDetailDialog({ open, onOpenChange, certame, empenho: incomingEmpenho, onDataChange }: EmpenhoDetailDialogProps) {
+export function EmpenhoDetailDialog({ open, onOpenChange, certame, empenho: incomingEmpenho, onDataChange, rateios, fornecedoresCadastrados }: EmpenhoDetailDialogProps) {
     const lastValidEmpenho = React.useRef<Empenho | null>(incomingEmpenho);
     if (incomingEmpenho) lastValidEmpenho.current = incomingEmpenho;
     const empenho = incomingEmpenho || lastValidEmpenho.current;
@@ -68,6 +72,7 @@ export function EmpenhoDetailDialog({ open, onOpenChange, certame, empenho: inco
                             <TabsList className="bg-transparent h-12 w-full justify-start gap-4">
                                 <TabsTrigger value="itens" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full font-semibold">Itens do Empenho</TabsTrigger>
                                 <TabsTrigger value="nfs" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full font-semibold">Execução (NFs)</TabsTrigger>
+                                <TabsTrigger value="custo-real" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full font-semibold">Custo Real (Compras)</TabsTrigger>
                                 <TabsTrigger value="info" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full font-semibold">Informações do Empenho</TabsTrigger>
                             </TabsList>
                         </div>
@@ -83,6 +88,13 @@ export function EmpenhoDetailDialog({ open, onOpenChange, certame, empenho: inco
                                 <ScrollArea className="flex-1 min-h-0">
                                     <div className="p-6 h-full min-h-[500px]">
                                         <EntregasNFTab certameId={certame.id} empenho={empenho} onDataChange={onDataChange} />
+                                    </div>
+                                </ScrollArea>
+                            </TabsContent>
+                            <TabsContent value="custo-real" className="h-full data-[state=active]:flex flex-col m-0">
+                                <ScrollArea className="flex-1 min-h-0">
+                                    <div className="p-6 min-h-[500px]">
+                                        <CustoRealTab certameId={certame.id} empenho={empenho} certameItens={certame.itens} rateios={rateios} fornecedoresCadastrados={fornecedoresCadastrados} onDataChange={onDataChange} />
                                     </div>
                                 </ScrollArea>
                             </TabsContent>

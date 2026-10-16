@@ -17,7 +17,7 @@ import { clienteAssessoriaRepository } from '@/lib/repositories/cliente-assessor
 import { configuracaoRepository } from '@/lib/repositories/configuracao-repository';
 import { custoFixoRepository } from '@/lib/repositories/custo-fixo-repository';
 import { custoVariavelRepository } from '@/lib/repositories/custo-variavel-repository';
-import { calculateCertamePricing, type CalculatedItemMetrics, type FullPricingContext, type CertameComCalculo } from '@/lib/pricing-calculator';
+import { rateiosPercentuais, calculateCertamePricing, type CalculatedItemMetrics, type FullPricingContext, type CertameComCalculo } from '@/lib/pricing-calculator';
 import { CertameSelector } from './components/certame-selector';
 import { CertameHeader } from './components/certame-header';
 import { ItensTable } from './components/itens-table';
@@ -164,7 +164,7 @@ export default function PrecificacaoUnificadaPage() {
                 <div className="space-y-6">
                     <CertameHeader certame={selectedCertame} onUpdate={updateCertame} clientes={clientes} />
                     <ItensTable certame={selectedCertame} context={{ produtos, categorias, fornecedores, clientes }} onUpdateCertame={updateCertame} />
-                    <ExecucaoSection certame={selectedCertame} onDataChange={onDataChange} />
+                    <ExecucaoSection certame={selectedCertame} onDataChange={onDataChange} rateios={rateiosPercentuais(pricingContext)} fornecedoresCadastrados={fornecedores.map(f => f.nomeFantasia).filter(Boolean)} />
                 </div>
             )}
             {!selectedCertame && !(isLoading || isUserLoading) && (
