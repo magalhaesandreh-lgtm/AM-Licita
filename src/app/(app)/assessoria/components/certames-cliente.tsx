@@ -22,6 +22,7 @@ import { ItensTable } from '../../precificacao-unificada/components/itens-table'
 import { ExecucaoSection } from '../../precificacao-unificada/components/execucao-section';
 import { AvisoCustosCliente, aliquotaPadraoDoCertame } from '../../precificacao-unificada/components/aviso-custos-cliente';
 import { CertameFormDialog } from '../../precificacao-unificada/certame-form-dialog';
+import { custosDeCertame } from '@/lib/pdf/analise-exequibilidade';
 
 /** Totais em reais com 2 casas (a formatação de preço unitário usa até 4). */
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
@@ -219,7 +220,7 @@ export function CertamesClienteTab({ cliente, certames, pricingContext, custosCl
                     </div>
                     <AvisoCustosCliente certame={selecionado} custosClientes={custosLista} />
                     <CertameHeader certame={selecionado} onUpdate={atualizarCertame} clientes={[cliente]} />
-                    <ItensTable certame={selecionado} context={{ produtos, categorias, fornecedores, clientes: [cliente] }} onUpdateCertame={atualizarCertame} aliquotaPadrao={aliquotaPadraoDoCertame(selecionado, custosLista)} />
+                    <ItensTable certame={selecionado} context={{ produtos, categorias, fornecedores, clientes: [cliente] }} onUpdateCertame={atualizarCertame} aliquotaPadrao={aliquotaPadraoDoCertame(selecionado, custosLista)} pricingContext={contextoParaCertame(selecionado, pricingContext, custosLista)} custosDe={custosDeCertame(selecionado, custosLista.map(c => c.clienteId))} />
                     <ExecucaoSection certame={selecionado} onDataChange={() => { void onDataChange(); }} rateios={rateiosPercentuais(contextoParaCertame(selecionado, pricingContext, custosLista))} fornecedoresCadastrados={fornecedores.map(f => f.nomeFantasia).filter(Boolean)} />
                 </div>
             )}

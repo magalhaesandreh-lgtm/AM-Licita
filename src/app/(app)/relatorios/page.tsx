@@ -8,13 +8,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getMonth, getYear, setMonth, setYear } from 'date-fns';
 
-import type { CertameUnificado, ClienteAssessoria, Fornecedor } from '@/lib/models';
+import type { CertameUnificado, ClienteAssessoria, Fornecedor, Empenho, NotaFiscal } from '@/lib/models';
 import { certameUnificadoRepository } from '@/lib/repositories/certame-unificado-repository';
 import { custosClienteRepository } from '@/lib/repositories/custos-cliente-repository';
+import { custosDeCertame, analisarExequibilidade, ROTULO_SITUACAO } from '@/lib/pdf/analise-exequibilidade';
 import type { CustosClienteAssessoria } from '@/lib/models';
 import { calculateCertamePricing, contextoParaCertame, type CertameComCalculo, type FullPricingContext } from '@/lib/pricing-calculator';
 import { generatePrecificacaoPdf, generateExecucaoPdf, generateFinanceiroPdf } from '@/lib/pdf-generator';
-import { exportToCsv } from '@/lib/csv-exporter';
+import { exportToCsv, numeroBr, dataBr as dataBrCsv } from '@/lib/csv-exporter';
 import { formatCurrency } from '@/lib/utils';
 import { impostoRepository } from '@/lib/repositories/imposto-repository';
 import { categoriaRepository } from '@/lib/repositories/categoria-repository';
@@ -145,17 +146,26 @@ export default function RelatoriosPage() {
     return { totalPrevisto, lucroPrevisto, totalFaturado, lucroReal, saldoReceber: totalFaturado - totalPago };
   }, [selectedCertame]);
 
+  /** Custos usados no cálculo do certame selecionado, para os relatórios explicarem cada número. */
+  const opcoesRelatorio = () => {
+    if (!selectedCertame || !pricingContext) return {};
+    return {
+      contexto: contextoParaCertame(selectedCertame, pricingContext, custosClientes),
+      custosDe: custosDeCertame(selectedCertame, custosClientes.map(c => c.clienteId)),
+    };
+  };
+
   const handlePrecificacaoPdf = () => {
     if (!selectedCertame) return;
     const empresa = clientes.find(e => e.id === selectedCertame.empresaDestinoId);
-    generatePrecificacaoPdf(selectedCertame, fornecedores, empresa);
+    generatePrecificacaoPdf(selectedCertame, fornecedores, empresa, opcoesRelatorio());
     toast({ title: 'PDF de Precificação gerado!' });
   }
 
   const handleFinanceiroPdf = () => {
     if (!selectedCertame) return;
     const empresa = clientes.find(e => e.id === selectedCertame.empresaDestinoId);
-    generateFinanceiroPdf(selectedCertame, empresa);
+    generateFinanceiroPdf(selectedCertame, empresa, opcoesRelatorio());
     toast({ title: 'PDF Financeiro gerado!' });
   }
 
@@ -167,93 +177,92 @@ export default function RelatoriosPage() {
 
   const handleExportPrecificacaoCsv = () => {
     if (!selectedCertame) return;
-    const dataToExport = selectedCertame.itens.map(item => ({
-        item: item.itemNumero,
-        descricao: item.descricao,
-        unidade: item.unidade,
-        quantidade: item.qtd,
-        preco_ref: item.precoReferencia,
-        custo_base: item.metrics.custoBaseEstimadoUnit ?? item.custoUnitBase,
-        estimado: item.metrics.estimado ? 'SIM' : 'NÃO',
-        frete_unit: item.freteUnitario,
-        overhead_unit: item.custoFixoRateadoUnit,
-        custo_total_unit: item.metrics.custoTotalUnit,
-        imposto_unit: item.metrics.impostoUnit,
-        preco_final_unit: item.metrics.precoFinalUnit,
-        lucro_unit: item.metrics.lucroUnit,
-        lucro_total: item.metrics.lucroTotal,
-        margem_pct: item.metrics.margemAplicadaPercent,
+    const { contexto } = opcoesRelatorio() as { contexto?: FullPricingContext };
+    const analise = analisarExequibilidade(selectedCertame, contexto);
+    const dataToExport = analise.itens.map(a => ({
+        'Item': a.item.itemNumero,
+        'Produto': a.item.descricao,
+        'Unidade': a.item.unidade,
+        'Quantidade': numeroBr(a.item.qtd, 0),
+        'Preço de referência do edital (R$)': numeroBr(a.referencia),
+        'Custo do produto (R$)': numeroBr(a.custoProduto, 4),
+        'Custo estimado pelo preço vencedor?': a.item.metrics.estimado ? 'Sim' : 'Não',
+        'Frete (R$/un.)': numeroBr(a.frete, 4),
+        'Despesas fixas - overhead (R$/un.)': a.fixos !== null ? numeroBr(a.fixos, 4) : '',
+        'Custos do certame (R$/un.)': a.variaveis !== null ? numeroBr(a.variaveis, 4) : numeroBr(a.rateados, 4),
+        'Custo total (R$/un.)': numeroBr(a.custoTotal, 4),
+        'Imposto (%)': numeroBr(a.aliquotaPct),
+        'Margem de lucro desejada (%)': numeroBr(a.margemAlvoPct),
+        'Preço calculado (R$/un.)': numeroBr(a.preco, 4),
+        'Lucro por unidade (R$)': numeroBr(a.lucroUnit, 4),
+        'Lucro total (R$)': numeroBr(a.lucroTotal),
+        'Lucro vendendo pelo preço de referência (R$/un.)': numeroBr(a.lucroUnitRef, 4),
+        'Lucro no preço de referência (%)': numeroBr(a.lucroPctRef),
+        'Custo máximo do produto para a margem desejada (R$)': numeroBr(a.custoMaximoProduto, 4),
+        'Situação': ROTULO_SITUACAO[a.situacao],
+        'Explicação': a.motivo,
     }));
-    exportToCsv(dataToExport, `precificacao_${selectedCertame.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.csv`);
-    toast({ title: 'CSV de Precificação exportado!' });
+    exportToCsv(dataToExport, `itens_e_viabilidade_${selectedCertame.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.csv`);
+    toast({ title: 'Planilha dos itens exportada!' });
   }
+
+  /** Linhas de NF por item, com valor, imposto, custo e lucro calculados como no restante do sistema. */
+  const linhasNf = (certame: CertameUnificado, empenho: Empenho, nf: NotaFiscal) => nf.itens.map(itemNf => {
+    const ei = empenho.itens.find(e => e.id === itemNf.empenhoItemId);
+    const pi = certame.itens.find(p => p.id === ei?.precificacaoItemId);
+    const valor = (ei?.precoVendaUnitSnapshot || 0) * itemNf.qtdNestaNF;
+    const imposto = valor * ((pi?.aliquotaPct ?? 0) / 100);
+    const custo = ei ? custoUnitEfetivo(ei) * itemNf.qtdNestaNF : 0;
+    return {
+        'Certame': `${certame.modalidade} ${certame.numeroAno}`,
+        'Órgão': certame.orgao,
+        'Empresa': certame.empresaDestinoNome || 'AM Contratos & Soluções B2G',
+        'Empenho': empenho.numeroEmpenho,
+        'Nota fiscal': nf.numeroNF,
+        'Data de emissão': dataBrCsv(nf.dataNFISO),
+        'Data de entrega': dataBrCsv(nf.dataEntregaISO),
+        'Situação do pagamento': nf.pago ? 'Paga' : 'Aguardando pagamento',
+        'Data do pagamento': dataBrCsv(nf.dataPagamentoISO),
+        'Produto': ei?.descricaoSnapshot || '',
+        'Unidade': ei?.unidadeSnapshot || '',
+        'Quantidade': numeroBr(itemNf.qtdNestaNF, 0),
+        'Preço unitário (R$)': numeroBr(ei?.precoVendaUnitSnapshot, 4),
+        'Valor (R$)': numeroBr(valor),
+        'Imposto (R$)': numeroBr(imposto),
+        'Custo (R$)': numeroBr(custo),
+        'Lucro (R$)': numeroBr(valor - imposto - custo),
+    };
+  });
 
   const handleExportNfsCertameCsv = () => {
     if (!selectedCertame) return;
-    const dataToExport: any[] = [];
-    selectedCertame.empenhos.forEach(empenho => {
-        empenho.nfs.forEach(nf => {
-            nf.itens.forEach(itemNf => {
-                const empenhoItem = empenho.itens.find(ei => ei.id === itemNf.empenhoItemId);
-                dataToExport.push({
-                    certame: selectedCertame.numeroAno,
-                    empenho: empenho.numeroEmpenho,
-                    nf_numero: nf.numeroNF,
-                    nf_data: nf.dataNFISO,
-                    nf_data_entrega: nf.dataEntregaISO,
-                    nf_paga: nf.pago,
-                    item_descricao: empenhoItem?.descricaoSnapshot,
-                    item_qtd: itemNf.qtdNestaNF,
-                    item_preco_venda: empenhoItem?.precoVendaUnitSnapshot,
-                    item_lucro: empenhoItem?.lucroUnitSnapshot
-                });
-            });
-        });
-    });
+    const dataToExport = selectedCertame.empenhos.flatMap(empenho => empenho.nfs.flatMap(nf => linhasNf(selectedCertame, empenho, nf)));
     if (dataToExport.length === 0) {
         toast({ title: 'Nenhuma NF para exportar neste certame.', variant: 'destructive' });
         return;
     }
-    exportToCsv(dataToExport, `nfs_certame_${selectedCertame.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.csv`);
-    toast({ title: 'CSV de NFs do Certame exportado!' });
+    exportToCsv(dataToExport, `notas_fiscais_${selectedCertame.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.csv`);
+    toast({ title: 'Planilha das notas fiscais exportada!' });
   }
   
   const handleExportNfsMesCsv = () => {
     const selectedMonth = getMonth(viewDate);
     const selectedYear = getYear(viewDate);
-
     const nfsDoMes: any[] = [];
     allCertames.forEach(certame => {
         certame.empenhos.forEach(empenho => {
             empenho.nfs.forEach(nf => {
                 const dateToCheck = new Date(useDeliveryDate ? nf.dataEntregaISO : nf.dataNFISO);
-                if (getMonth(dateToCheck) === selectedMonth && getYear(dateToCheck) === selectedYear) {
-                     nf.itens.forEach(itemNf => {
-                        const empenhoItem = empenho.itens.find(ei => ei.id === itemNf.empenhoItemId);
-                        nfsDoMes.push({
-                           certame: certame.numeroAno,
-                           empenho: empenho.numeroEmpenho,
-                           nf_numero: nf.numeroNF,
-                           nf_data: nf.dataNFISO,
-                           nf_data_entrega: nf.dataEntregaISO,
-                           nf_paga: nf.pago,
-                           item_descricao: empenhoItem?.descricaoSnapshot,
-                           item_qtd: itemNf.qtdNestaNF,
-                           item_preco_venda: empenhoItem?.precoVendaUnitSnapshot,
-                           item_lucro: empenhoItem?.lucroUnitSnapshot
-                       });
-                    });
-                }
+                if (getMonth(dateToCheck) === selectedMonth && getYear(dateToCheck) === selectedYear) nfsDoMes.push(...linhasNf(certame, empenho, nf));
             });
         });
     });
-
      if (nfsDoMes.length === 0) {
         toast({ title: 'Nenhuma NF para exportar no mês selecionado.', variant: 'destructive' });
         return;
     }
-    exportToCsv(nfsDoMes, `nfs_mes_${selectedYear}_${selectedMonth + 1}.csv`);
-    toast({ title: 'CSV de NFs do Mês exportado!' });
+    exportToCsv(nfsDoMes, `notas_fiscais_${selectedYear}_${String(selectedMonth + 1).padStart(2, '0')}.csv`);
+    toast({ title: 'Planilha das notas fiscais do mês exportada!' });
   }
 
 
@@ -321,22 +330,22 @@ export default function RelatoriosPage() {
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               <Card>
-                  <CardHeader><CardTitle>Exequibilidade</CardTitle></CardHeader>
-                  <CardContent><Button onClick={handlePrecificacaoPdf} className="w-full">Gerar PDF de Precificação</Button></CardContent>
+                  <CardHeader><CardTitle>Exequibilidade</CardTitle><CardDescription>Para o cliente: quais itens compensam, por que os outros não compensam, como o preço foi calculado e o que significa cada termo.</CardDescription></CardHeader>
+                  <CardContent><Button onClick={handlePrecificacaoPdf} className="w-full">Gerar relatório de exequibilidade</Button></CardContent>
               </Card>
               <Card>
-                  <CardHeader><CardTitle>Relatório Financeiro</CardTitle></CardHeader>
-                  <CardContent><Button onClick={handleFinanceiroPdf} className="w-full">Gerar PDF Financeiro</Button></CardContent>
+                  <CardHeader><CardTitle>Relatório Financeiro</CardTitle><CardDescription>Faturamento, custos, imposto e lucro previstos; o que já foi pedido, faturado e recebido; resultado por item.</CardDescription></CardHeader>
+                  <CardContent><Button onClick={handleFinanceiroPdf} className="w-full">Gerar relatório financeiro</Button></CardContent>
               </Card>
               <Card>
-                  <CardHeader><CardTitle>Execução (Empenhos e NFs)</CardTitle></CardHeader>
-                  <CardContent><Button onClick={handleExecucaoPdf} className="w-full">Gerar PDF de Execução</Button></CardContent>
+                  <CardHeader><CardTitle>Execução (Empenhos e NFs)</CardTitle><CardDescription>Cada pedido do órgão: o que foi pedido, entregue e falta entregar, prazos e situação de pagamento das notas.</CardDescription></CardHeader>
+                  <CardContent><Button onClick={handleExecucaoPdf} className="w-full">Gerar relatório de execução</Button></CardContent>
               </Card>
                <Card>
-                  <CardHeader><CardTitle>Exportação CSV (Certame)</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>Planilhas (Excel)</CardTitle><CardDescription>Abrem direto no Excel, com colunas em português, valores em reais e a situação de cada item explicada.</CardDescription></CardHeader>
                   <CardContent className="space-y-2">
-                    <Button variant="outline" onClick={handleExportPrecificacaoCsv} className="w-full">Exportar Itens da Precificação</Button>
-                    <Button variant="outline" onClick={handleExportNfsCertameCsv} className="w-full">Exportar NFs do Certame</Button>
+                    <Button variant="outline" onClick={handleExportPrecificacaoCsv} className="w-full">Planilha dos itens e da viabilidade</Button>
+                    <Button variant="outline" onClick={handleExportNfsCertameCsv} className="w-full">Planilha das notas fiscais do certame</Button>
                   </CardContent>
               </Card>
           </div>
@@ -344,7 +353,7 @@ export default function RelatoriosPage() {
       )}
 
       <Card>
-        <CardHeader><CardTitle>Exportação de Notas Fiscais do Mês (CSV)</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Notas fiscais do mês (planilha para Excel)</CardTitle><CardDescription>Todas as notas emitidas no mês, de todos os certames, com valor, lucro e situação de pagamento.</CardDescription></CardHeader>
         <CardContent className="flex flex-wrap items-end gap-4">
            <div className="flex items-center gap-2"><Label>Mês</Label><Select value={String(getMonth(viewDate))} onValueChange={v => setViewDate(d => setMonth(d, parseInt(v)))}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></div>
            <div className="flex items-center gap-2"><Label>Ano</Label><Select value={String(getYear(viewDate))} onValueChange={v => setViewDate(d => setYear(d, parseInt(v)))}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></div>
