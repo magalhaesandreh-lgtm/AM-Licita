@@ -1,31 +1,37 @@
-import jsPDF from 'jspdf';
+import { criarPdfTimbrado, garantirEspaco, MARGEM_TIMBRADO, numerarPaginas } from '@/lib/pdf/timbrado';
 import autoTable from 'jspdf-autotable';
 import { format as formatDate, parseISO } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import type { CertameComCalculo } from '@/lib/pricing-calculator';
 import type { ClienteAssessoria, Fornecedor } from './models';
 
+const X0 = MARGEM_TIMBRADO.left;
+const Y0 = MARGEM_TIMBRADO.top + 6;
+const emitidoEm = () => `Emitido em ${formatDate(new Date(), 'dd/MM/yyyy HH:mm')}`;
+
 export const generatePrecificacaoPdf = (certame: CertameComCalculo, fornecedores: Fornecedor[], empresa?: ClienteAssessoria | null) => {
-    const doc = new jsPDF({ orientation: 'landscape' });
+    const doc = criarPdfTimbrado({ orientation: 'landscape' });
     const { itens, ...certameInfo } = certame;
     const activeItems = itens.filter(item => item.status !== 'PERDIDO');
 
-    doc.setFontSize(18);
-    doc.text(`Relatório de Exequibilidade (Precificação)`, 14, 22);
-    doc.setFontSize(11);
-    doc.text(`${certameInfo.modalidade} ${certameInfo.numeroAno} - ${certameInfo.orgao}`, 14, 30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`Relatório de Exequibilidade (Precificação)`, X0, Y0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`${certameInfo.modalidade} ${certameInfo.numeroAno} - ${certameInfo.orgao}`, X0, Y0 + 6);
     
     doc.setFontSize(9);
     doc.setTextColor(100);
     if (empresa) {
-        doc.text(`Empresa Destino: ${empresa.nomeFantasia} - CNPJ: ${empresa.cnpj}`, 14, 35);
+        doc.text(`Empresa Destino: ${empresa.nomeFantasia}${empresa.cnpj ? ` - CNPJ: ${empresa.cnpj}` : ''}  |  ${emitidoEm()}`, X0, Y0 + 11);
     } else {
-        doc.text(`Empresa Destino: Não definida`, 14, 35);
+        doc.text(`Empresa Destino: AM Contratos & Soluções B2G  |  ${emitidoEm()}`, X0, Y0 + 11);
     }
     doc.setTextColor(0);
 
 
-    let finalY = 40;
+    let finalY = Y0 + 15;
 
     const head = [['Item', 'Descrição', 'UN', 'Qtd', 'Preço Ref.', 'Fornecedor', 'Marca', 'Modelo', 'Custo', 'Frete', 'Overhead', 'Imposto', 'Preço Final', 'Lucro (R$)', 'Margem (%)']];
     const body = activeItems.map(item => {
@@ -57,8 +63,8 @@ export const generatePrecificacaoPdf = (certame: CertameComCalculo, fornecedores
     const lucroTotal = activeItems.reduce((acc, item) => acc + item.metrics.lucroTotal, 0);
 
     const footer = [
-        ['TOTAIS', '', '', '', '', '', '', '', formatCurrency(totalCustoCompra), formatCurrency(totalFrete), formatCurrency(totalOverhead), formatCurrency(totalImposto), formatCurrency(totalVenda), formatCurrency(lucroTotal), '']
-    ];
+        [{ content: 'TOTAIS', colSpan: 8 }, formatCurrency(totalCustoCompra), formatCurrency(totalFrete), formatCurrency(totalOverhead), formatCurrency(totalImposto), formatCurrency(totalVenda), formatCurrency(lucroTotal), '']
+    ] as any;
 
 
     autoTable(doc, {
@@ -66,31 +72,37 @@ export const generatePrecificacaoPdf = (certame: CertameComCalculo, fornecedores
         head: head,
         body: body,
         foot: footer,
+        showFoot: 'lastPage',
         theme: 'striped',
         headStyles: { fillColor: [41, 128, 185], fontSize: 8 },
         footStyles: { fillColor: [22, 160, 133], textColor: [255,255,255], fontStyle: 'bold' },
-        styles: { fontSize: 7, cellPadding: 2 },
+        styles: { fontSize: 7, cellPadding: 1.6 },
+        margin: MARGEM_TIMBRADO,
         columnStyles: {
             0: { cellWidth: 10 },
-            1: { cellWidth: 40 },
+            1: { cellWidth: 55 },
         }
     });
 
+    numerarPaginas(doc);
     doc.save(`precificacao_${certameInfo.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.pdf`);
 };
 
 export const generateFinanceiroPdf = (certame: CertameComCalculo, empresa?: ClienteAssessoria | null) => {
-    const doc = new jsPDF({ orientation: 'landscape' });
+    const doc = criarPdfTimbrado({ orientation: 'landscape' });
     const { itens, ...certameInfo } = certame;
     const activeItems = itens.filter(item => item.status !== 'PERDIDO');
 
-    doc.setFontSize(18);
-    doc.text(`Relatório Financeiro de Precificação`, 14, 22);
-    doc.setFontSize(11);
-    doc.text(`${certameInfo.modalidade} ${certameInfo.numeroAno} - ${certameInfo.orgao}`, 14, 30);
-    if (empresa) {
-        doc.text(`Empresa: ${empresa.nomeFantasia}`, 14, 35);
-    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`Relatório Financeiro de Precificação`, X0, Y0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`${certameInfo.modalidade} ${certameInfo.numeroAno} - ${certameInfo.orgao}`, X0, Y0 + 6);
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`${empresa ? `Empresa: ${empresa.nomeFantasia}  |  ` : ''}${emitidoEm()}`, X0, Y0 + 11);
+    doc.setTextColor(0);
     
     const totalVenda = activeItems.reduce((acc, item) => acc + (item.metrics.precoFinalUnit * item.qtd), 0);
     const totalCusto = activeItems.reduce((acc, item) => acc + (item.metrics.custoTotalUnit * item.qtd), 0);
@@ -100,7 +112,8 @@ export const generateFinanceiroPdf = (certame: CertameComCalculo, empresa?: Clie
     const margemMedia = receitaLiquidaTotal > 0 ? (lucroTotal / receitaLiquidaTotal) * 100 : 0;
 
     autoTable(doc, {
-        startY: 40,
+        startY: Y0 + 15,
+        margin: MARGEM_TIMBRADO,
         body: [
             ['Valor Total do Contrato (Faturamento)', formatCurrency(totalVenda)],
             ['Custo Total (Base+Frete+Overhead)', formatCurrency(totalCusto)],
@@ -136,54 +149,61 @@ export const generateFinanceiroPdf = (certame: CertameComCalculo, empresa?: Clie
         theme: 'striped',
         headStyles: { fillColor: [41, 128, 185], fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2 },
+        margin: MARGEM_TIMBRADO,
         columnStyles: {
             1: { cellWidth: 60 },
         }
     });
 
+    numerarPaginas(doc);
     doc.save(`financeiro_${certameInfo.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.pdf`);
 };
 
 
 export const generateExecucaoPdf = (certame: CertameComCalculo) => {
-    const doc = new jsPDF();
+    const doc = criarPdfTimbrado();
     const { ...certameInfo } = certame;
+    const larguraUtil = doc.internal.pageSize.getWidth() - MARGEM_TIMBRADO.left - MARGEM_TIMBRADO.right;
 
-    doc.setFontSize(18);
-    doc.text(`Relatório de Execução`, 14, 22);
-    doc.setFontSize(11);
-    doc.text(`${certameInfo.modalidade} ${certameInfo.numeroAno} - ${certameInfo.orgao}`, 14, 30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`Relatório de Execução`, X0, Y0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`${certameInfo.modalidade} ${certameInfo.numeroAno} - ${certameInfo.orgao}`, X0, Y0 + 6, { maxWidth: larguraUtil });
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`${certameInfo.empresaDestinoNome ? `Empresa: ${certameInfo.empresaDestinoNome}  |  ` : ''}${emitidoEm()}`, X0, Y0 + 12);
+    doc.setTextColor(0);
 
-    let finalY = 35;
+    let finalY = Y0 + 20;
     
     if (certame.empenhos.length === 0) {
         doc.setFontSize(12);
-        doc.text("Nenhum empenho lançado para este certame.", 14, finalY);
+        doc.text("Nenhum empenho lançado para este certame.", X0, finalY);
+        numerarPaginas(doc);
         doc.save(`execucao_${certameInfo.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.pdf`);
         return;
     }
 
     certame.empenhos.forEach((empenho, index) => {
-        if (index > 0 && finalY > 20) {
+        // Cada empenho começa em página nova; o timbrado entra automaticamente.
+        if (index > 0) {
             doc.addPage();
-            finalY = 20;
+            finalY = Y0;
         }
-
-        if (finalY + 80 > doc.internal.pageSize.height) { // Check space before adding content
-            doc.addPage();
-            finalY = 20;
-        }
+        finalY = garantirEspaco(doc, finalY, 40);
 
         doc.setFontSize(14);
-        doc.text(`Empenho: ${empenho.numeroEmpenho}`, 14, finalY);
+        doc.text(`Empenho: ${empenho.numeroEmpenho}`, X0, finalY);
         finalY += 7;
         doc.setFontSize(11);
-        doc.text(`Status: ${empenho.statusEntrega} / ${empenho.statusFinanceiro}`, 14, finalY);
+        doc.text(`Status: ${empenho.statusEntrega} / ${empenho.statusFinanceiro}`, X0, finalY);
         
         finalY += 15;
         
         doc.setFontSize(12);
-        doc.text("Notas Fiscais do Empenho", 14, finalY);
+        doc.text("Notas Fiscais do Empenho", X0, finalY);
         finalY += 5;
 
         if (empenho.nfs.length > 0) {
@@ -199,14 +219,15 @@ export const generateExecucaoPdf = (certame: CertameComCalculo) => {
                     nf.pago ? 'Pago' : 'Pendente'
                 ];
             });
-            autoTable(doc, { startY: finalY, head: nfsHead, body: nfsBody, theme: 'grid' });
+            autoTable(doc, { startY: finalY, head: nfsHead, body: nfsBody, theme: 'grid', margin: MARGEM_TIMBRADO });
             finalY = (doc as any).lastAutoTable.finalY + 10;
         } else {
             doc.setFontSize(10);
-            doc.text("Nenhuma NF lançada para este empenho.", 14, finalY);
+            doc.text("Nenhuma NF lançada para este empenho.", X0, finalY);
             finalY += 10;
         }
     });
 
+    numerarPaginas(doc);
     doc.save(`execucao_${certameInfo.numeroAno.replace(/[^a-zA-Z0-9]/g, '')}.pdf`);
 };

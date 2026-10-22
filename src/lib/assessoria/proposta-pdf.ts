@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from '@/lib/utils';
+import { criarPdfTimbrado, garantirEspaco, MARGEM_TIMBRADO, numerarPaginas } from '@/lib/pdf/timbrado';
 import { FAIXAS_EXITO, FAIXAS_HIBRIDO, type FaixaExito } from './fee-calculator';
 
 export interface DadosProposta {
@@ -34,10 +35,12 @@ function paragrafos(doc: jsPDF, texto: string, x: number, y: number, largura: nu
         if (linhas.length > 1) {
             const corpo = linhas.slice(0, -1);
             for (const l of corpo) {
+                y = garantirEspaco(doc, y, passo);
                 doc.text(l, x, y, { align: 'justify', maxWidth: largura });
                 y += passo;
             }
         }
+        y = garantirEspaco(doc, y, passo);
         doc.text(linhas[linhas.length - 1], x, y);
         y += passo + 1;
     }
@@ -65,27 +68,14 @@ function descreverFaixas(faixas: FaixaExito[]): string[][] {
  * Texto formal, sem travessões.
  */
 export function gerarPropostaPdf(d: DadosProposta): jsPDF {
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    // Papel timbrado da AM Contratos em todas as páginas (topo, marca-d'água e rodapé).
+    const doc = criarPdfTimbrado();
     const largura = doc.internal.pageSize.getWidth();
     const margem = 20;
     const util = largura - margem * 2;
     const emissao = d.emissao ?? new Date();
-    let y = 22;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(EMPRESA.nome, margem, y);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(90);
-    y += 5;
-    doc.text(`${EMPRESA.cnpj}  |  ${EMPRESA.endereco}`, margem, y);
-    doc.setDrawColor(180);
-    y += 3;
-    doc.line(margem, y, largura - margem, y);
-    doc.setTextColor(0);
-
-    y += 12;
+    const margemTabela = { ...MARGEM_TIMBRADO, left: margem, right: margem };
+    let y = MARGEM_TIMBRADO.top + 8;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(15);
     doc.text('PROPOSTA COMERCIAL', margem, y);
@@ -103,6 +93,7 @@ export function gerarPropostaPdf(d: DadosProposta): jsPDF {
 
     y += 10;
     doc.setFont('helvetica', 'bold');
+    y = garantirEspaco(doc, y, 25);
     doc.text('1. Objeto e escopo dos serviços', margem, y);
     doc.setFont('helvetica', 'normal');
     y += 6;
@@ -110,6 +101,7 @@ export function gerarPropostaPdf(d: DadosProposta): jsPDF {
     y = paragrafos(doc, escopo, margem, y, util) + 4;
 
     doc.setFont('helvetica', 'bold');
+    y = garantirEspaco(doc, y, 25);
     doc.text('2. Investimento', margem, y);
     doc.setFont('helvetica', 'normal');
     y += 4;
@@ -128,12 +120,13 @@ export function gerarPropostaPdf(d: DadosProposta): jsPDF {
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2.5 },
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 70 }, 1: { halign: 'right' } },
-        margin: { left: margem, right: margem },
+        margin: margemTabela,
     });
     y = (doc as any).lastAutoTable.finalY + 8;
 
     if (d.modeloExito !== 'NENHUM') {
         doc.setFont('helvetica', 'bold');
+        y = garantirEspaco(doc, y, 40);
         doc.text('3. Honorários de êxito', margem, y);
         doc.setFont('helvetica', 'normal');
         y += 6;
@@ -150,13 +143,14 @@ export function gerarPropostaPdf(d: DadosProposta): jsPDF {
             styles: { fontSize: 10, cellPadding: 2.5 },
             headStyles: { fillColor: [60, 60, 60] },
             columnStyles: { 1: { halign: 'right', cellWidth: 35 } },
-            margin: { left: margem, right: margem },
+            margin: margemTabela,
         });
         y = (doc as any).lastAutoTable.finalY + 8;
     }
 
     const n = d.modeloExito !== 'NENHUM' ? 4 : 3;
     doc.setFont('helvetica', 'bold');
+    y = garantirEspaco(doc, y, 25);
     doc.text(`${n}. Validade e condições`, margem, y);
     doc.setFont('helvetica', 'normal');
     y += 6;
@@ -166,14 +160,12 @@ export function gerarPropostaPdf(d: DadosProposta): jsPDF {
     ].join(' ');
     y = paragrafos(doc, cond, margem, y, util) + 16;
 
-    if (y > 272) {
-        doc.addPage();
-        y = 40;
-    }
+    y = garantirEspaco(doc, y, 14);
     doc.line(margem, y, margem + 80, y);
     doc.setFontSize(9);
     doc.text(EMPRESA.nome, margem, y + 5);
     doc.text(EMPRESA.cnpj, margem, y + 10);
 
+    numerarPaginas(doc);
     return doc;
 }
