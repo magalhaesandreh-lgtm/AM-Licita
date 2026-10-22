@@ -25,6 +25,7 @@ import { CertameHeader } from './components/certame-header';
 import { ItensTable } from './components/itens-table';
 import { ExecucaoSection } from './components/execucao-section';
 import { AvisoCustosCliente, aliquotaPadraoDoCertame } from './components/aviso-custos-cliente';
+import { custosDeCertame } from '@/lib/pdf/analise-exequibilidade';
 
 type CertameSavePayload = Partial<Omit<CertameUnificado, 'id' | 'empenhos'>>;
 
@@ -171,7 +172,7 @@ export default function PrecificacaoUnificadaPage() {
                 <div className="space-y-6">
                     <AvisoCustosCliente certame={selectedCertame} custosClientes={custosClientes} />
                     <CertameHeader certame={selectedCertame} onUpdate={updateCertame} clientes={clientes} />
-                    <ItensTable certame={selectedCertame} context={{ produtos, categorias, fornecedores, clientes }} onUpdateCertame={updateCertame} aliquotaPadrao={aliquotaPadraoDoCertame(selectedCertame, custosClientes)} />
+                    <ItensTable certame={selectedCertame} context={{ produtos, categorias, fornecedores, clientes }} onUpdateCertame={updateCertame} aliquotaPadrao={aliquotaPadraoDoCertame(selectedCertame, custosClientes)} pricingContext={contextoParaCertame(selectedCertame, pricingContext, custosClientes)} custosDe={custosDeCertame(selectedCertame, custosClientes.map(c => c.clienteId))} />
                     <ExecucaoSection certame={selectedCertame} onDataChange={onDataChange} rateios={rateiosPercentuais(contextoParaCertame(selectedCertame, pricingContext, custosClientes))} fornecedoresCadastrados={fornecedores.map(f => f.nomeFantasia).filter(Boolean)} />
                 </div>
             )}

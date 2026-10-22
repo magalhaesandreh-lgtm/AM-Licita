@@ -15,7 +15,7 @@ import { useUser } from '@/firebase';
 import { cn, formatCurrency, parseCurrency } from '@/lib/utils';
 import { generatePrecificacaoPdf } from '@/lib/pdf-generator';
 import type { ItemPrecificacao, Produto, Categoria, Fornecedor, CertameUnificado } from '@/lib/models';
-import type { CalculatedItemMetrics, CertameComCalculo } from '@/lib/pricing-calculator';
+import type { CalculatedItemMetrics, CertameComCalculo, FullPricingContext } from '@/lib/pricing-calculator';
 import { ItemFormDialog } from './item-form-dialog';
 import { ComposicaoDialog } from './composicao-dialog';
 import {
@@ -34,9 +34,13 @@ interface ItensTableProps {
     onUpdateCertame: (updatedCertame: CertameUnificado) => Promise<void>;
     /** Alíquota padrão dos itens novos quando o certame é de um cliente com custos cadastrados. */
     aliquotaPadrao?: { produto: number; servico: number };
+    /** Custos usados no cálculo deste certame, para o relatório explicar de onde vem cada número. */
+    pricingContext?: FullPricingContext | null;
+    /** Nome de quem tem os custos usados (cliente ou AM Contratos). */
+    custosDe?: string;
 }
 
-export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao }: ItensTableProps) {
+export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, pricingContext, custosDe }: ItensTableProps) {
     const { toast } = useToast();
     const { user } = useUser();
     const [isItemFormOpen, setIsItemFormOpen] = React.useState(false);
@@ -145,7 +149,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao }
             <CardHeader className="flex-row items-center justify-between">
                 <div><CardTitle>Itens (Planilha)</CardTitle><CardDescription>Defina os preços base de cada item.</CardDescription></div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => generatePrecificacaoPdf(certame, context.fornecedores, context.clientes.find(c => c.id === certame.empresaDestinoId))}><FileDown /> PDF</Button>
+                    <Button variant="outline" onClick={() => generatePrecificacaoPdf(certame, context.fornecedores, context.clientes.find(c => c.id === certame.empresaDestinoId), { contexto: pricingContext, custosDe })} title="Relatório de exequibilidade explicado, no timbrado, pronto para enviar ao cliente"><FileDown /> Relatório PDF</Button>
                     <Button onClick={handleNewItem}><PlusCircle /> Novo Item</Button>
                 </div>
             </CardHeader>
