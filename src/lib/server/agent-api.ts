@@ -162,6 +162,7 @@ async function exportar(db: Firestore) {
     cobrancas: await todos('cobrancasAssessoria'),
     pendencias: await todos('pendencias'),
     clientes: await todos('clients'),
+    custosClientes: await todos('custosClientesAssessoria'),
   };
 }
 
@@ -187,6 +188,7 @@ const COLECOES_SIMPLES: Record<string, string> = {
   certidoes: 'certidoes',
   cobrancas: 'cobrancasAssessoria',
   clientes: 'clients',
+  'custos-clientes': 'custosClientesAssessoria',
 };
 
 async function crudSimples(ctx: Contexto, nomeRota: string, resto: string[]) {
@@ -201,7 +203,15 @@ async function crudSimples(ctx: Contexto, nomeRota: string, resto: string[]) {
     }
     if (metodo === 'POST') {
       const now = agora();
-      const ref = await col.add({ ...limpar(corpoObjeto(corpo)), createdAt: now, updatedAt: now });
+      const dados = limpar(corpoObjeto(corpo)) as Record<string, unknown>;
+      // Custos do cliente: um documento por cliente, com o id igual ao id do cliente (a tela lê assim).
+      if (nomeRota === 'custos-clientes') {
+        const clienteId = typeof dados.clienteId === 'string' ? dados.clienteId.trim() : '';
+        if (!clienteId) throw new ApiError(400, 'Informe clienteId.');
+        await col.doc(clienteId).set({ ...dados, clienteId, createdAt: now, updatedAt: now });
+        return { id: clienteId };
+      }
+      const ref = await col.add({ ...dados, createdAt: now, updatedAt: now });
       return { id: ref.id };
     }
     throw new ApiError(405, 'Método não permitido.');

@@ -32,9 +32,11 @@ interface ItensTableProps {
     certame: CertameComCalculo;
     context: { produtos: Produto[]; categorias: Categoria[]; fornecedores: Fornecedor[]; clientes: any[] };
     onUpdateCertame: (updatedCertame: CertameUnificado) => Promise<void>;
+    /** Alíquota padrão dos itens novos quando o certame é de um cliente com custos cadastrados. */
+    aliquotaPadrao?: { produto: number; servico: number };
 }
 
-export function ItensTable({ certame, context, onUpdateCertame }: ItensTableProps) {
+export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao }: ItensTableProps) {
     const { toast } = useToast();
     const { user } = useUser();
     const [isItemFormOpen, setIsItemFormOpen] = React.useState(false);
@@ -186,7 +188,7 @@ export function ItensTable({ certame, context, onUpdateCertame }: ItensTableProp
                     })}
                 </div>
             </CardContent>
-            <ItemFormDialog open={isItemFormOpen} onOpenChange={(o) => { setIsItemFormOpen(o); if (!o) setTimeout(() => setEditingItem(null), 300); }} certame={certame} item={editingItem} context={context} onSuccess={(it) => onUpdateCertame({ ...certame, itens: it })} />
+            <ItemFormDialog open={isItemFormOpen} onOpenChange={(o) => { setIsItemFormOpen(o); if (!o) setTimeout(() => setEditingItem(null), 300); }} certame={certame} item={editingItem} context={context} aliquotaPadrao={aliquotaPadrao} onSuccess={(it) => onUpdateCertame({ ...certame, itens: it })} />
             <ComposicaoDialog open={isComposicaoOpen} onOpenChange={(o) => { setIsComposicaoOpen(o); if (!o) setTimeout(() => setComposicaoItem(null), 300); }} item={composicaoItem} />
             <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
                 <AlertDialogContent>

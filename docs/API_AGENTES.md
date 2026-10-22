@@ -41,7 +41,7 @@ curl -s -H "Authorization: Bearer $AMGESTAO_TOKEN" "$AMGESTAO_URL/api/agente/res
 | Rota | O que faz |
 |---|---|
 | `GET /resumo?dias=7` | entregas com saldo e prazo, NFs a receber, certidões vencendo, pendências |
-| `GET /exportar` | backup completo (certames, empenhos, NFs, certidões, cobranças, pendências, clientes) |
+| `GET /exportar` | backup completo (certames, empenhos, NFs, certidões, cobranças, pendências, clientes, custos dos clientes) |
 | `GET /pendencias?status=ABERTA\|RESOLVIDA\|TODAS` | lista |
 | `POST /pendencias` | cria; com `chave` atualiza a aberta em vez de duplicar (transação) |
 | `POST /pendencias/resolver` | `{chave ou id, resolucao}`; não cria documento fantasma |
@@ -54,6 +54,6 @@ curl -s -H "Authorization: Bearer $AMGESTAO_TOKEN" "$AMGESTAO_URL/api/agente/res
 | `GET/POST /certames/:id/empenhos/:eid/nfs` | lista / lança (recalcula saldos) |
 | `PATCH/DELETE .../nfs/:nid` | altera / exclui (recalcula saldos) |
 | `POST .../nfs/:nid/pagar` | `{dataPagamentoISO}` |
-| `GET/POST/PATCH/DELETE /certidoes`, `/cobrancas`, `/clientes` | CRUD simples; `GET` aceita filtros por igualdade (`?status=PAGO`) |
+| `GET/POST/PATCH/DELETE /certidoes`, `/cobrancas`, `/clientes`, `/custos-clientes` | CRUD simples; `GET` aceita filtros por igualdade (`?status=PAGO`). Em `/custos-clientes` o id do documento é o id do cliente (custos fixos, variáveis, faturamento previsto e alíquota usados nos certames do cliente) |
 
 Erros: `401` token ausente/inválido, `404` não encontrado, `400` corpo inválido, `503` API desligada.

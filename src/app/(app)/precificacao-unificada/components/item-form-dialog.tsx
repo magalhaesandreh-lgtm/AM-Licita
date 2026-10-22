@@ -44,9 +44,11 @@ interface ItemFormDialogProps {
     item: ItemPrecificacao | null;
     context: { produtos: Produto[]; categorias: Categoria[]; fornecedores: Fornecedor[]; clientes: any[] };
     onSuccess: (updatedItems: ItemPrecificacao[]) => Promise<void>;
+    /** Alíquota do cliente (certame de cliente da assessoria); sem ela vale a das Configurações. */
+    aliquotaPadrao?: { produto: number; servico: number };
 }
 
-export function ItemFormDialog({ open, onOpenChange, certame, item, context, onSuccess }: ItemFormDialogProps) {
+export function ItemFormDialog({ open, onOpenChange, certame, item, context, onSuccess, aliquotaPadrao }: ItemFormDialogProps) {
     const [isSaving, setIsSaving] = React.useState(false);
     const { toast } = useToast();
     const [impostoSettings, setImpostoSettings] = React.useState<any>(null);
@@ -57,15 +59,16 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
         resolver: zodResolver(itemFormSchema),
         defaultValues: item
             ? { ...item, precoFinalVendidoReal: item.precoFinalVendidoReal ?? null, loteNumero: item.loteNumero ?? null }
-            : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: certame.isRetroativo ? 'GANHO' : 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: 4.5 }
+            : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: certame.isRetroativo ? 'GANHO' : 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: aliquotaPadrao?.produto ?? impostoSettings?.aliquotaProduto ?? 4.5 }
     });
 
     React.useEffect(() => {
         if (open) {
             form.reset(item
                 ? { ...item, precoFinalVendidoReal: item.precoFinalVendidoReal ?? null, loteNumero: item.loteNumero ?? null }
-                : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: certame.isRetroativo ? 'GANHO' : 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: 4.5 });
+                : { itemNumero: (certame.itens.length > 0 ? Math.max(...certame.itens.map(i => i.itemNumero)) : 0) + 1, loteNumero: null, descricao: '', categoriaId: '', status: certame.isRetroativo ? 'GANHO' : 'PENDENTE', unidade: '', qtd: 1, custoUnitBase: 0, tipoItem: 'PRODUTO', anexoSimples: 'I', aliquotaPct: aliquotaPadrao?.produto ?? impostoSettings?.aliquotaProduto ?? 4.5 });
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, item, certame.itens, form]);
 
     const wt = form.watch('tipoItem');
@@ -78,12 +81,12 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
         if (!impostoSettings) return;
         if (wt === 'PRODUTO') {
             form.setValue('anexoSimples', impostoSettings.anexoProduto);
-            form.setValue('aliquotaPct', impostoSettings.aliquotaProduto);
+            form.setValue('aliquotaPct', aliquotaPadrao ? aliquotaPadrao.produto : impostoSettings.aliquotaProduto);
         } else {
             form.setValue('anexoSimples', impostoSettings.anexoServico);
-            form.setValue('aliquotaPct', impostoSettings.aliquotaServico);
+            form.setValue('aliquotaPct', aliquotaPadrao ? aliquotaPadrao.servico : impostoSettings.aliquotaServico);
         }
-    }, [wt, form, impostoSettings]);
+    }, [wt, form, impostoSettings, aliquotaPadrao?.produto, aliquotaPadrao?.servico]);
 
     const onSubmit = async (v: ItemFormValues) => {
         setIsSaving(true);

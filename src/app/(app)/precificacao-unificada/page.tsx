@@ -17,11 +17,14 @@ import { clienteAssessoriaRepository } from '@/lib/repositories/cliente-assessor
 import { configuracaoRepository } from '@/lib/repositories/configuracao-repository';
 import { custoFixoRepository } from '@/lib/repositories/custo-fixo-repository';
 import { custoVariavelRepository } from '@/lib/repositories/custo-variavel-repository';
-import { rateiosPercentuais, calculateCertamePricing, type CalculatedItemMetrics, type FullPricingContext, type CertameComCalculo } from '@/lib/pricing-calculator';
+import { custosClienteRepository } from '@/lib/repositories/custos-cliente-repository';
+import type { CustosClienteAssessoria } from '@/lib/models';
+import { rateiosPercentuais, calculateCertamePricing, contextoParaCertame, type CalculatedItemMetrics, type FullPricingContext, type CertameComCalculo } from '@/lib/pricing-calculator';
 import { CertameSelector } from './components/certame-selector';
 import { CertameHeader } from './components/certame-header';
 import { ItensTable } from './components/itens-table';
 import { ExecucaoSection } from './components/execucao-section';
+import { AvisoCustosCliente, aliquotaPadraoDoCertame } from './components/aviso-custos-cliente';
 
 type CertameSavePayload = Partial<Omit<CertameUnificado, 'id' | 'empenhos'>>;
 
@@ -52,12 +55,13 @@ export default function PrecificacaoUnificadaPage() {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isRefreshing, setIsRefreshing] = React.useState(false);
     const [clienteFiltroId, setClienteFiltroId] = React.useState<string | null>(null);
+    const [custosClientes, setCustosClientes] = React.useState<CustosClienteAssessoria[]>([]);
 
     const loadData = React.useCallback(async (keepSelection = false) => {
         if (isUserLoading) return;
         if (!keepSelection) setIsLoading(true);
         try {
-            const [certamesData, produtosData, categoriasData, fornecedoresData, impostosData, clientesData, configData, fixosData, variaveisData] = await Promise.all([
+            const [certamesData, produtosData, categoriasData, fornecedoresData, impostosData, clientesData, configData, fixosData, variaveisData, custosClientesData] = await Promise.all([
                 certameUnificadoRepository.list(),
                 produtoRepository.list(),
                 categoriaRepository.list(),
@@ -67,7 +71,9 @@ export default function PrecificacaoUnificadaPage() {
                 configuracaoRepository.get(),
                 custoFixoRepository.list(),
                 custoVariavelRepository.list(),
+                custosClienteRepository.list(),
             ]);
+            setCustosClientes(custosClientesData);
             setProdutos(produtosData);
             setCategorias(categoriasData.filter(c => c.ativo));
             setFornecedores(fornecedoresData);
@@ -89,7 +95,8 @@ export default function PrecificacaoUnificadaPage() {
             let certameToSelect = certamesFiltrados.find(c => c.id === initialSelectionId);
             if (!certameToSelect && certamesFiltrados.length > 0) certameToSelect = certamesFiltrados[0];
             if (certameToSelect) {
-                const calculated = calculateCertamePricing(certameToSelect, context);
+                // Certame de cliente da assessoria: usa os custos do cliente (aba Custos do Cliente).
+                const calculated = calculateCertamePricing(certameToSelect, contextoParaCertame(certameToSelect, context, custosClientesData));
                 setSelectedCertame(calculated);
                 if (paramId !== certameToSelect.id) router.replace(`/precificacao-unificada?id=${certameToSelect.id}`, { scroll: false });
             } else {
@@ -110,7 +117,7 @@ export default function PrecificacaoUnificadaPage() {
         if (!pricingContext || !allCertames) return;
         const certame = allCertames.find(c => c.id === id);
         if (certame) {
-            setSelectedCertame(calculateCertamePricing(certame, pricingContext));
+            setSelectedCertame(calculateCertamePricing(certame, contextoParaCertame(certame, pricingContext, custosClientes)));
             router.replace(`/precificacao-unificada?id=${id}`, { scroll: false });
         }
     };
@@ -123,7 +130,7 @@ export default function PrecificacaoUnificadaPage() {
                 const updatedData = await certameUnificadoRepository.getById(selectedCertame.id);
                 if (updatedData) {
                     setAllCertames(prev => prev.map(c => c.id === updatedData.id ? updatedData : c));
-                    setSelectedCertame(calculateCertamePricing(updatedData, pricingContext));
+                    setSelectedCertame(calculateCertamePricing(updatedData, contextoParaCertame(updatedData, pricingContext, custosClientes)));
                 } else {
                     await loadData();
                 }
@@ -135,7 +142,7 @@ export default function PrecificacaoUnificadaPage() {
         } finally {
             setIsRefreshing(false);
         }
-    }, [selectedCertame, pricingContext, toast, loadData]);
+    }, [selectedCertame, pricingContext, custosClientes, toast, loadData]);
 
     const updateCertame = async (updatedCertame: CertameUnificado) => {
         await certameUnificadoRepository.update(updatedCertame.id, sanitizeCertameForSave(updatedCertame));
@@ -162,9 +169,10 @@ export default function PrecificacaoUnificadaPage() {
             )}
             {selectedCertame && pricingContext && (
                 <div className="space-y-6">
+                    <AvisoCustosCliente certame={selectedCertame} custosClientes={custosClientes} />
                     <CertameHeader certame={selectedCertame} onUpdate={updateCertame} clientes={clientes} />
-                    <ItensTable certame={selectedCertame} context={{ produtos, categorias, fornecedores, clientes }} onUpdateCertame={updateCertame} />
-                    <ExecucaoSection certame={selectedCertame} onDataChange={onDataChange} rateios={rateiosPercentuais(pricingContext)} fornecedoresCadastrados={fornecedores.map(f => f.nomeFantasia).filter(Boolean)} />
+                    <ItensTable certame={selectedCertame} context={{ produtos, categorias, fornecedores, clientes }} onUpdateCertame={updateCertame} aliquotaPadrao={aliquotaPadraoDoCertame(selectedCertame, custosClientes)} />
+                    <ExecucaoSection certame={selectedCertame} onDataChange={onDataChange} rateios={rateiosPercentuais(contextoParaCertame(selectedCertame, pricingContext, custosClientes))} fornecedoresCadastrados={fornecedores.map(f => f.nomeFantasia).filter(Boolean)} />
                 </div>
             )}
             {!selectedCertame && !(isLoading || isUserLoading) && (

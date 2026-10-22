@@ -43,9 +43,11 @@ interface CertameFormDialogProps {
     onSuccess: (newCertameId?: string) => void;
     certameToEdit?: CertameUnificado | null;
     clientes?: any[];
+    /** Empresa já escolhida no certame novo (ex.: aberto pelo painel do cliente da assessoria). */
+    empresaDestinoIdPadrao?: string;
 }
 
-export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit, clientes = [] }: CertameFormDialogProps) {
+export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit, clientes = [], empresaDestinoIdPadrao }: CertameFormDialogProps) {
     const [isSaving, setIsSaving] = React.useState(false);
     const { toast } = useToast();
     
@@ -73,6 +75,7 @@ export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit
             status: 'EM_ANDAMENTO',
             isRetroativo: false,
             orcamentoSigiloso: false,
+            empresaDestinoId: empresaDestinoIdPadrao,
         }
     });
     
@@ -99,8 +102,9 @@ export function CertameFormDialog({ open, onOpenChange, onSuccess, certameToEdit
             status: 'EM_ANDAMENTO',
             isRetroativo: false,
             orcamentoSigiloso: false,
+            empresaDestinoId: empresaDestinoIdPadrao,
         });
-    }, [certameToEdit, form]);
+    }, [certameToEdit, form, empresaDestinoIdPadrao]);
 
     const onSubmit = async (values: CertameFormValues) => {
         setIsSaving(true);
