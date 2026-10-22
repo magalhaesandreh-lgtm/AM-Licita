@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { notFound, useRouter, useParams } from 'next/navigation';
+import { notFound, useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { DndContext, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent, DragOverlay, type DragStartEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PlusCircle, GripVertical, CheckCircle, XCircle, AlertCircle, Link as LinkIcon, Banknote, ArrowLeft } from 'lucide-react';
-import type { ClienteAssessoria, KanbanCard, KanbanColumn, CobrancaAssessoria, CertameUnificado, Empenho } from '@/lib/models';
+import type { ClienteAssessoria, KanbanCard, KanbanColumn, CobrancaAssessoria, CertameUnificado, Empenho, CustosClienteAssessoria } from '@/lib/models';
 import { clienteAssessoriaRepository } from '@/lib/repositories/cliente-assessoria-repository';
 import { kanbanRepository } from '@/lib/repositories/kanban-repository';
 import { cobrancaRepository } from '@/lib/repositories/cobranca-repository';
@@ -38,19 +38,14 @@ import { categoriaRepository } from '@/lib/repositories/categoria-repository';
 import { configuracaoRepository } from '@/lib/repositories/configuracao-repository';
 import { custoFixoRepository } from '@/lib/repositories/custo-fixo-repository';
 import { custoVariavelRepository } from '@/lib/repositories/custo-variavel-repository';
-import { calculateCertamePricing, type FullPricingContext } from '@/lib/pricing-calculator';
+import { type FullPricingContext } from '@/lib/pricing-calculator';
+import { custosClienteRepository } from '@/lib/repositories/custos-cliente-repository';
 import { calcularExitoHibrido, calcularExitoPorFaixa } from '@/lib/assessoria/fee-calculator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useUser } from '@/firebase';
 import { PrecificacaoAssessoriaPanel } from '../components/precificacao-assessoria';
-
-type CertameComMetricas = CertameUnificado & {
-    totalPrevisto: number;
-    lucroPrevisto: number;
-    totalFaturado: number;
-    lucroReal: number;
-    saldoAReceber: number;
-};
+import { CertamesClienteTab } from '../components/certames-cliente';
+import { CustosClienteTab } from '../components/custos-cliente';
 
 type EmpenhoComCalculo = Empenho & { 
     certame: CertameUnificado;
@@ -65,6 +60,8 @@ export default function ClientePainelPage() {
     const clienteId = params.clienteId as string;
     const { toast } = useToast();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const abaInicial = searchParams.get('aba') || 'kanban';
     const [isLoading, setIsLoading] = React.useState(true);
     const { user, isUserLoading } = useUser();
 
@@ -76,6 +73,7 @@ export default function ClientePainelPage() {
     const [certamesDoCliente, setCertamesDoCliente] = React.useState<CertameUnificado[]>([]);
     const [allCertames, setAllCertames] = React.useState<CertameUnificado[]>([]);
     const [pricingContext, setPricingContext] = React.useState<FullPricingContext | null>(null);
+    const [custosCliente, setCustosCliente] = React.useState<CustosClienteAssessoria | null>(null);
     const [statusFinanceiro, setStatusFinanceiro] = React.useState<{ text: 'Em Dia' | 'Pendente' | 'Atrasado'; variant: 'default' | 'outline' | 'destructive' }>({ text: 'Em Dia', variant: 'default' });
     
     // Modal States
@@ -96,7 +94,8 @@ export default function ClientePainelPage() {
                 categoriasData,
                 configData,
                 fixosData,
-                variaveisData
+                variaveisData,
+                custosClienteData
             ] = await Promise.all([
                 clienteAssessoriaRepository.getById(clienteId),
                 kanbanRepository.listColumnsByCliente(clienteId),
@@ -108,6 +107,7 @@ export default function ClientePainelPage() {
                 configuracaoRepository.get(),
                 custoFixoRepository.list(),
                 custoVariavelRepository.list(),
+                custosClienteRepository.get(clienteId),
             ]);
 
             if (!clienteData) {
@@ -123,6 +123,7 @@ export default function ClientePainelPage() {
                 custosVariaveis: variaveisData,
             };
             setPricingContext(context);
+            setCustosCliente(custosClienteData);
 
             setCliente(clienteData);
             setColumns(columnsData);
@@ -151,12 +152,14 @@ export default function ClientePainelPage() {
 
     const handleDataChange = React.useCallback(async () => {
         try {
-            const [columnsData, cardsData, cobrancasData, allCertamesData] = await Promise.all([
+            const [columnsData, cardsData, cobrancasData, allCertamesData, custosClienteData] = await Promise.all([
                 kanbanRepository.listColumnsByCliente(clienteId),
                 kanbanRepository.listCardsByCliente(clienteId),
                 cobrancaRepository.listByCliente(clienteId),
-                certameUnificadoRepository.list()
+                certameUnificadoRepository.list(),
+                custosClienteRepository.get(clienteId),
             ]);
+            setCustosCliente(custosClienteData);
             setColumns(columnsData);
             setCards(cardsData);
             setCobrancas(cobrancasData);
@@ -167,46 +170,6 @@ export default function ClientePainelPage() {
         }
     }, [clienteId, toast]);
     
-    const certamesComMetricas: CertameComMetricas[] = React.useMemo(() => {
-        if (!pricingContext) return [];
-        return certamesDoCliente.map(certame => {
-            const certameCalculado = calculateCertamePricing(certame, pricingContext);
-
-            let faturado = 0;
-            let pago = 0;
-            let lucroReal = 0;
-
-            certame.empenhos.forEach(empenho => {
-                empenho.nfs.forEach(nf => {
-                    const valorTotalNF = nf.itens.reduce((total, itemNF) => {
-                        const empenhoItem = empenho.itens.find(ei => ei.id === itemNF.empenhoItemId);
-                        return total + (itemNF.qtdNestaNF * (empenhoItem?.precoVendaUnitSnapshot || 0));
-                    }, 0);
-                    
-                    const lucroTotalNF = nf.itens.reduce((total, itemNF) => {
-                        const empenhoItem = empenho.itens.find(ei => ei.id === itemNF.empenhoItemId);
-                        return total + (itemNF.qtdNestaNF * (empenhoItem?.lucroUnitSnapshot || 0));
-                    }, 0);
-
-                    faturado += valorTotalNF;
-                    lucroReal += lucroTotalNF;
-                    if (nf.pago) {
-                        pago += valorTotalNF;
-                    }
-                });
-            });
-
-            return {
-                ...certame,
-                totalPrevisto: certameCalculado?.itens.reduce((acc, item) => acc + (item.metrics.precoFinalUnit * item.qtd), 0) || 0,
-                lucroPrevisto: certameCalculado?.itens.reduce((acc, item) => acc + item.metrics.lucroTotal, 0) || 0,
-                totalFaturado: faturado,
-                lucroReal: lucroReal,
-                saldoAReceber: faturado - pago,
-            }
-        });
-    }, [certamesDoCliente, pricingContext]);
-
     const empenhosCalculados = React.useMemo<EmpenhoComCalculo[]>(() => {
         if (!cliente?.vinculo) return [];
 
@@ -277,13 +240,14 @@ export default function ClientePainelPage() {
                 </div>
             </div>
             
-            <Tabs defaultValue="kanban">
-                <TabsList>
+            <Tabs defaultValue={abaInicial}>
+                <TabsList className="h-auto flex-wrap">
                     <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                     <TabsTrigger value="kanban">Kanban (Demandas)</TabsTrigger>
                     <TabsTrigger value="financeiro">Financeiro (Assessoria)</TabsTrigger>
                     <TabsTrigger value="certames">Certames/Execução (B2G)</TabsTrigger>
-                    <TabsTrigger value="precificacao">Precificação</TabsTrigger>
+                    <TabsTrigger value="precificacao">Precificação (Honorários)</TabsTrigger>
+                    <TabsTrigger value="custos">Custos do Cliente</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview" className="mt-4">
                     <VisaoGeralTab cliente={cliente} cobrancas={cobrancas} certames={certamesDoCliente} statusFinanceiro={statusFinanceiro}/>
@@ -307,10 +271,13 @@ export default function ClientePainelPage() {
                     />
                 </TabsContent>
                 <TabsContent value="certames" className="mt-4">
-                    <CertamesTab certames={certamesComMetricas} />
+                    <CertamesClienteTab cliente={cliente} certames={certamesDoCliente} pricingContext={pricingContext} custosCliente={custosCliente} onDataChange={handleDataChange} />
                 </TabsContent>
                 <TabsContent value="precificacao" className="mt-4">
                     <PrecificacaoAssessoriaPanel cliente={cliente} onVinculoAtualizado={handleDataChange} />
+                </TabsContent>
+                <TabsContent value="custos" className="mt-4">
+                    <CustosClienteTab cliente={cliente} custos={custosCliente} certames={certamesDoCliente} pricingContext={pricingContext} onSalvo={handleDataChange} />
                 </TabsContent>
             </Tabs>
             {isCardFormOpen && (
@@ -694,26 +661,6 @@ function FinanceiroTab({ cliente, cobrancas, empenhos, onDataChange }: { cliente
                 </CardContent>
             </Card>
         </div>
-    );
-}
-
-function CertamesTab({certames}: {certames: CertameComMetricas[]}) {
-    const columns: ColumnDef<CertameComMetricas>[] = [
-        { id: 'certame', header: 'Certame', cell: (row) => <Link className="hover:underline" href={`/certames/${row.id}`}>{`${row.modalidade} ${row.numeroAno}`}</Link> },
-        { accessorKey: 'orgao', header: 'Órgão', cell: (row) => row.orgao },
-        { accessorKey: 'status', header: 'Status', cell: (row) => <Badge>{row.status}</Badge> },
-        { accessorKey: 'totalPrevisto', header: 'Total Previsto', align: 'right', cell: (row) => formatCurrency(row.totalPrevisto) },
-        { accessorKey: 'totalFaturado', header: 'Total Faturado', align: 'right', cell: (row) => formatCurrency(row.totalFaturado) },
-        { accessorKey: 'lucroReal', header: 'Lucro Real', align: 'right', cell: (row) => formatCurrency(row.lucroReal) },
-    ]
-
-    return (
-        <Card>
-            <CardHeader><CardTitle>Certames Vinculados</CardTitle></CardHeader>
-            <CardContent>
-                <DataTable columns={columns} data={certames} emptyStateMessage="Nenhum certame vinculado a este cliente."/>
-            </CardContent>
-        </Card>
     );
 }
 

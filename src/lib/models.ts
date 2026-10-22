@@ -404,3 +404,47 @@ export interface PrecificacaoAssessoria extends BaseEntity {
   precoProposto: number;
   status: 'RASCUNHO' | 'ENVIADA' | 'APROVADA' | 'RECUSADA';
 }
+
+
+// ===============================================================
+// Custos do cliente da assessoria (licitações dos clientes)
+// Mesma lógica dos custos da AM Contratos (Configurações), mas com os custos
+// que o CLIENTE tem: DAS, telefonia, portal, combustível etc. Os certames do
+// cliente (empresaDestinoId) passam a ser precificados com estes custos.
+// ===============================================================
+export interface CustoFixoCliente {
+  id: string;
+  descricao: string;
+  /** Valor mensal (ex.: DAS, telefonia, contador, internet). */
+  valorMensal: number;
+  ativo: boolean;
+}
+
+export interface CustoVariavelCliente {
+  id: string;
+  descricao: string;
+  /** PERCENT_CERTAME: % sobre o custo dos itens; VALOR_CERTAME: R$ por certame (ex.: portal, combustível). */
+  tipoRateio: 'PERCENT_CERTAME' | 'VALOR_CERTAME';
+  valor: number;
+  ativo: boolean;
+  /** Vazio: vale para todos os certames do cliente. Preenchido: só para aquele certame. */
+  certameId?: string | null;
+}
+
+export interface CustosClienteAssessoria extends BaseEntity {
+  /** O id do documento é o próprio clienteId. */
+  clienteId: string;
+  clienteNome: string;
+  /** Faturamento mensal previsto do cliente: base do rateio dos custos fixos (custos fixos ÷ faturamento). */
+  faturamentoMensalPrevisto: number;
+  /** Se preenchido (> 0), substitui o cálculo automático do percentual de custos fixos. */
+  overheadPercentManual?: number | null;
+  /** Frete padrão sobre o custo dos itens (%). */
+  fretePadraoPercent: number;
+  /** Alíquota sobre a venda usada nos itens novos (MEI: 0, porque o DAS é fixo e entra nos custos fixos). */
+  aliquotaProdutoPct: number;
+  aliquotaServicoPct: number;
+  custosFixos: CustoFixoCliente[];
+  custosVariaveis: CustoVariavelCliente[];
+  observacoes?: string;
+}

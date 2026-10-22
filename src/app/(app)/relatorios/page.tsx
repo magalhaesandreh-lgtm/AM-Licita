@@ -10,7 +10,9 @@ import { getMonth, getYear, setMonth, setYear } from 'date-fns';
 
 import type { CertameUnificado, ClienteAssessoria, Fornecedor } from '@/lib/models';
 import { certameUnificadoRepository } from '@/lib/repositories/certame-unificado-repository';
-import { calculateCertamePricing, type CertameComCalculo, type FullPricingContext } from '@/lib/pricing-calculator';
+import { custosClienteRepository } from '@/lib/repositories/custos-cliente-repository';
+import type { CustosClienteAssessoria } from '@/lib/models';
+import { calculateCertamePricing, contextoParaCertame, type CertameComCalculo, type FullPricingContext } from '@/lib/pricing-calculator';
 import { generatePrecificacaoPdf, generateExecucaoPdf, generateFinanceiroPdf } from '@/lib/pdf-generator';
 import { exportToCsv } from '@/lib/csv-exporter';
 import { formatCurrency } from '@/lib/utils';
@@ -41,6 +43,7 @@ export default function RelatoriosPage() {
   const [allCertames, setAllCertames] = React.useState<CertameUnificado[]>([]);
   const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([]);
   const [clientes, setClientes] = React.useState<ClienteAssessoria[]>([]);
+  const [custosClientes, setCustosClientes] = React.useState<CustosClienteAssessoria[]>([]);
   const [pricingContext, setPricingContext] = React.useState<FullPricingContext | null>(null);
   const [selectedCertameId, setSelectedCertameId] = React.useState<string | null>(null);
   const { user, isUserLoading } = useUser();
@@ -58,7 +61,7 @@ export default function RelatoriosPage() {
     async function loadData() {
         setIsLoading(true);
         try {
-             const [certamesData, impostosData, categoriasData, configData, fixosData, variaveisData, fornecedoresData, clientesData] = await Promise.all([
+             const [certamesData, impostosData, categoriasData, configData, fixosData, variaveisData, fornecedoresData, clientesData, custosClientesData] = await Promise.all([
                 certameUnificadoRepository.list(),
                 impostoRepository.getSettings(),
                 categoriaRepository.list(),
@@ -67,7 +70,9 @@ export default function RelatoriosPage() {
                 custoVariavelRepository.list(),
                 fornecedorRepository.list(),
                 clienteAssessoriaRepository.list(),
+                custosClienteRepository.list(),
             ]);
+            setCustosClientes(custosClientesData);
 
             setAllCertames(certamesData);
             setFornecedores(fornecedoresData);
@@ -97,8 +102,8 @@ export default function RelatoriosPage() {
   const selectedCertame = React.useMemo(() => {
     if (!selectedCertameId || !pricingContext) return null;
     const certame = allCertames.find(c => c.id === selectedCertameId) || null;
-    return calculateCertamePricing(certame, pricingContext);
-  }, [selectedCertameId, allCertames, pricingContext]);
+    return calculateCertamePricing(certame, contextoParaCertame(certame, pricingContext, custosClientes));
+  }, [selectedCertameId, allCertames, pricingContext, custosClientes]);
 
   const summaryKpis = React.useMemo(() => {
     if (!selectedCertame) return null;

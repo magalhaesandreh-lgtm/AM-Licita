@@ -29,9 +29,9 @@ function InfoKpi({ label, value, className }: { label: string; value: string; cl
 
 export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProps) {
     const kpis = React.useMemo(() => {
-        let valorPotencial = 0, lucroPotencial = 0, faturado = 0, pago = 0, lucroRealizadoMes = 0;
+        let valorReferencia = 0, valorPotencial = 0, lucroPotencial = 0, faturado = 0, pago = 0, lucroRealizadoMes = 0;
         const activeItems = certame.itens.filter(item => item.status !== 'PERDIDO');
-        activeItems.forEach(item => { valorPotencial += item.metrics.precoFinalUnit * item.qtd; lucroPotencial += item.metrics.lucroTotal; });
+        activeItems.forEach(item => { valorReferencia += (item.precoReferencia || 0) * item.qtd; valorPotencial += item.metrics.precoFinalUnit * item.qtd; lucroPotencial += item.metrics.lucroTotal; });
         const hoje = new Date();
         certame.empenhos.forEach(empenho => {
             empenho.nfs.forEach(nf => {
@@ -51,14 +51,15 @@ export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProp
                 if (nf.dataNFISO && parseISO(nf.dataNFISO).getMonth() === hoje.getMonth() && parseISO(nf.dataNFISO).getFullYear() === hoje.getFullYear()) lucroRealizadoMes += l;
             });
         });
-        return { valorPotencial, lucroPotencial, faturado, pago, saldoReceber: faturado - pago, lucroRealizadoMes };
+        return { valorReferencia, valorPotencial, lucroPotencial, faturado, pago, saldoReceber: faturado - pago, lucroRealizadoMes };
     }, [certame]);
 
     return (
         <Card>
             <CardHeader><CardTitle>Resumo do Certame</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
+                    <InfoKpi label="Valor de Referência (Edital)" value={certame.orcamentoSigiloso ? 'Sigiloso' : formatCurrency(kpis.valorReferencia)} />
                     <InfoKpi label="Valor Potencial" value={formatCurrency(kpis.valorPotencial)} />
                     <InfoKpi label="Lucro Potencial" value={formatCurrency(kpis.lucroPotencial)} />
                     <InfoKpi label="Lucro Realizado (Mês)" value={formatCurrency(kpis.lucroRealizadoMes)} />

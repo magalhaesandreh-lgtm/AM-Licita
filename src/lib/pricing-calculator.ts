@@ -1,4 +1,4 @@
-import type { CertameUnificado, Categoria, ConfiguracoesGerais, CustoFixo, CustoVariavel, ItemPrecificacao } from './models';
+import type { CertameUnificado, Categoria, ConfiguracoesGerais, CustoFixo, CustoVariavel, CustosClienteAssessoria, ItemPrecificacao } from './models';
 import type { ImpostoSettings } from './repositories/imposto-repository';
 
 // Full context for calculation
@@ -63,6 +63,41 @@ export function rateiosPercentuais(context: FullPricingContext): RateiosPercentu
     .filter(c => c.ativo && c.tipoRateio === 'PERCENT_CERTAME')
     .reduce((acc, c) => acc + c.valor, 0) / 100;
   return { fretePct: (cfg.fretePadraoPercent || 0) / 100, overheadPct, variavelPct };
+}
+
+/**
+ * Contexto de precificação com os custos de um CLIENTE da assessoria (custos fixos, variáveis, frete e
+ * faturamento previsto do cliente), no lugar dos custos da AM Contratos. Os custos variáveis vinculados a
+ * um certame específico só entram quando certameId é esse certame.
+ */
+export function contextoDoCliente(base: FullPricingContext, custos: CustosClienteAssessoria, certameId?: string | null): FullPricingContext {
+  return {
+    ...base,
+    configuracoes: {
+      ...base.configuracoes,
+      fretePadraoPercent: custos.fretePadraoPercent || 0,
+      faturamentoMensalPrevisto: custos.faturamentoMensalPrevisto || 0,
+      overheadPercentManual: custos.overheadPercentManual && custos.overheadPercentManual > 0 ? custos.overheadPercentManual : null,
+    },
+    custosFixos: custos.custosFixos.map(c => ({ id: c.id, descricao: c.descricao, valorMensal: c.valorMensal, ativo: c.ativo })),
+    custosVariaveis: custos.custosVariaveis
+      .filter(c => !c.certameId || c.certameId === certameId)
+      .map(c => ({ id: c.id, descricao: c.descricao, tipoRateio: c.tipoRateio, valor: c.valor, ativo: c.ativo })),
+  };
+}
+
+/**
+ * Contexto certo para cada certame: certame de cliente com custos cadastrados usa os custos do cliente;
+ * os demais (certames da AM Contratos ou cliente sem custos cadastrados) usam as Configurações da empresa.
+ */
+export function contextoParaCertame(
+  certame: Pick<CertameUnificado, 'id' | 'empresaDestinoId'> | null | undefined,
+  base: FullPricingContext,
+  custosClientes: CustosClienteAssessoria[] | null | undefined
+): FullPricingContext {
+  if (!certame?.empresaDestinoId || !custosClientes?.length) return base;
+  const custos = custosClientes.find(c => c.clienteId === certame.empresaDestinoId);
+  return custos ? contextoDoCliente(base, custos, certame.id) : base;
 }
 
 /** Item com preço vencedor e sem custo informado: o custo será estimado (cálculo retroativo). */
