@@ -20,6 +20,7 @@ import { fornecedorRepository } from '@/lib/repositories/fornecedor-repository';
 import { CertameHeader } from '../../precificacao-unificada/components/certame-header';
 import { ItensTable } from '../../precificacao-unificada/components/itens-table';
 import { ExecucaoSection } from '../../precificacao-unificada/components/execucao-section';
+import { PainelDisputa } from '../../precificacao-unificada/components/painel-disputa';
 import { AvisoCustosCliente, aliquotaPadraoDoCertame } from '../../precificacao-unificada/components/aviso-custos-cliente';
 import { CertameFormDialog } from '../../precificacao-unificada/certame-form-dialog';
 import { custosDeCertame } from '@/lib/pdf/analise-exequibilidade';
@@ -221,6 +222,7 @@ export function CertamesClienteTab({ cliente, certames, pricingContext, custosCl
                     <AvisoCustosCliente certame={selecionado} custosClientes={custosLista} />
                     <CertameHeader certame={selecionado} onUpdate={atualizarCertame} clientes={[cliente]} />
                     <ItensTable certame={selecionado} context={{ produtos, categorias, fornecedores, clientes: [cliente] }} onUpdateCertame={atualizarCertame} aliquotaPadrao={aliquotaPadraoDoCertame(selecionado, custosLista)} pricingContext={contextoParaCertame(selecionado, pricingContext, custosLista)} custosDe={custosDeCertame(selecionado, custosLista.map(c => c.clienteId))} />
+                    <PainelDisputa certame={selecionado} />
                     <ExecucaoSection certame={selecionado} onDataChange={() => { void onDataChange(); }} rateios={rateiosPercentuais(contextoParaCertame(selecionado, pricingContext, custosLista))} fornecedoresCadastrados={fornecedores.map(f => f.nomeFantasia).filter(Boolean)} />
                 </div>
             )}
