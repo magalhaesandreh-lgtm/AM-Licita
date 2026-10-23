@@ -92,7 +92,8 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
         setIsSaving(true);
         try {
             let its: ItemPrecificacao[];
-            const safeV = { ...v, loteNumero: v.loteNumero ?? undefined, margemManualPct: v.margemManualPct ?? undefined, precoReferencia: v.precoReferencia ?? undefined };
+            const ganho = (v.precoFinalVendidoReal ?? 0) > 0;
+            const safeV = { ...v, status: ganho && v.status === 'PENDENTE' ? 'GANHO' as const : v.status, precoFinalVendidoReal: ganho ? v.precoFinalVendidoReal : null, loteNumero: v.loteNumero ?? undefined, margemManualPct: v.margemManualPct ?? undefined, precoReferencia: v.precoReferencia ?? undefined };
             if (item) its = certame.itens.map(i => i.id === item.id ? { ...i, ...safeV } as ItemPrecificacao : i);
             else its = [...certame.itens, { ...safeV, id: crypto.randomUUID(), freteUnitario: 0, custoFixoRateadoUnit: 0 } as ItemPrecificacao];
             await onSuccess(its);
@@ -109,14 +110,15 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
         <FormDialog open={open} onOpenChange={onOpenChange} title={item ? "Editar Item" : "Novo Item"} formId="item-form" isSaving={isSaving}>
             <Form {...form}>
                 <form id="item-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    {ws === 'GANHO' && (
-                        <Card className="bg-amber-50 border-amber-200">
-                            <CardHeader><CardTitle className="text-lg">Preço de Venda Vencedor</CardTitle></CardHeader>
+                    {(ws === 'GANHO' || (wPreco ?? 0) > 0 || certame.isRetroativo || !!item) && (
+                        <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
+                            <CardHeader><CardTitle className="text-lg">Valor ganho na licitação</CardTitle></CardHeader>
                             <CardContent>
                                 <FormField control={form.control} name="precoFinalVendidoReal" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Preço Unitário Vencedor*</FormLabel>
-                                        <FormControl><CurrencyInput value={field.value ?? undefined} onChange={v => field.onChange(v)} /></FormControl>
+                                        <FormLabel>Valor unitário ganho (R$){ws === 'GANHO' ? '*' : ''}</FormLabel>
+                                        <FormControl><CurrencyInput value={field.value ?? undefined} onChange={v => field.onChange(v === 0 ? null : v)} /></FormControl>
+                                        <p className="text-xs text-muted-foreground">Preenchido, o item fica como GANHO e o lucro é recalculado a partir deste valor, com os custos cadastrados. Deixe em branco enquanto não houver resultado.</p>
                                         <FormMessage />
                                     </FormItem>
                                 )} />

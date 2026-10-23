@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, MoreHorizontal, FileDown, Trash2, Pencil, RotateCcw, Check, Scale } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, FileDown, Trash2, Pencil, RotateCcw, Check, Scale, Trophy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ import type { ItemPrecificacao, Produto, Categoria, Fornecedor, CertameUnificado
 import type { CalculatedItemMetrics, CertameComCalculo, FullPricingContext } from '@/lib/pricing-calculator';
 import { ItemFormDialog } from './item-form-dialog';
 import { ComposicaoDialog } from './composicao-dialog';
+import { ValorGanhoDialog } from './valor-ganho-dialog';
 import {
     type PricingTableItem,
     EMPTY_TABLE_VALUE,
@@ -46,6 +47,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
     const [isItemFormOpen, setIsItemFormOpen] = React.useState(false);
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
     const [isComposicaoOpen, setIsComposicaoOpen] = React.useState(false);
+    const [valorGanhoItem, setValorGanhoItem] = React.useState<(ItemPrecificacao & { metrics: CalculatedItemMetrics }) | null>(null);
     const [editingItem, setEditingItem] = React.useState<ItemPrecificacao | null>(null);
     const [deletingItem, setDeletingItem] = React.useState<ItemPrecificacao | null>(null);
     const [composicaoItem, setComposicaoItem] = React.useState<(ItemPrecificacao & { metrics: CalculatedItemMetrics }) | null>(null);
@@ -119,7 +121,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
         { accessorKey: 'precoReferencia', header: 'Preço Ref.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableCurrency(row.precoReferencia)}</span> },
         { accessorKey: 'custoTotalUnit', header: 'Custo Unit.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{row.metrics.estimativaIndisponivel ? EMPTY_TABLE_VALUE : formatTableCurrency(row.metrics.custoTotalUnit)}{row.metrics.estimado && <Badge variant="outline" className="ml-1 border-amber-400 bg-amber-50 text-[10px] text-amber-800" title="Custo estimado a partir do preço vencedor (cálculo retroativo)">ESTIMADO</Badge>}</span> },
         { accessorKey: 'custoTotal', header: 'Custo Total', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableCurrency(getItemTotalCost(row))}</span> },
-        { accessorKey: 'precoFinalUnit', header: 'Valor Unit. Final', align: 'right', cell: (row) => <div className="whitespace-nowrap font-bold tabular-nums">{formatTableCurrency(row.metrics.precoFinalUnit)}</div> },
+        { accessorKey: 'precoFinalUnit', header: 'Valor Unit. Final', align: 'right', cell: (row) => <div className="whitespace-nowrap font-bold tabular-nums">{formatTableCurrency(row.metrics.precoFinalUnit)}{row.precoFinalVendidoReal ? <Badge className="ml-1 bg-amber-500 text-[10px] text-white hover:bg-amber-500" title="Valor ganho na licitação; lucro calculado a partir dele">GANHO</Badge> : null}</div> },
         { accessorKey: 'lucroUnit', header: 'Lucro Unit.', align: 'right', cell: (row) => <div className={cn("whitespace-nowrap tabular-nums", row.metrics.resultado === 'PREJUIZO' && 'text-destructive')}>{formatTableCurrency(row.metrics.lucroUnit)}</div> },
         { accessorKey: 'lucroTotal', header: 'Lucro Total', align: 'right', cell: (row) => <div className={cn("whitespace-nowrap tabular-nums", row.metrics.resultado === 'PREJUIZO' && 'text-destructive')}>{formatTableCurrency(row.metrics.lucroTotal)}</div> },
         { accessorKey: 'lucroReferencia', header: 'Lucro na Ref.', align: 'right', cell: (row) => <div className={cn("whitespace-nowrap tabular-nums", (getReferenceProfit(row) ?? 0) < 0 && 'text-destructive')}>{formatTableCurrency(getReferenceProfit(row))}</div> },
@@ -137,6 +139,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleViewComposicao(row)}><Scale className="mr-2 h-4 w-4" />Composição</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setValorGanhoItem(row)}><Trophy className="mr-2 h-4 w-4" />{row.precoFinalVendidoReal ? 'Alterar valor ganho' : 'Informar valor ganho'}</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleEditItem(row)}><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleDeleteItem(row)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Excluir</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -193,6 +196,20 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                 </div>
             </CardContent>
             <ItemFormDialog open={isItemFormOpen} onOpenChange={(o) => { setIsItemFormOpen(o); if (!o) setTimeout(() => setEditingItem(null), 300); }} certame={certame} item={editingItem} context={context} aliquotaPadrao={aliquotaPadrao} onSuccess={(it) => onUpdateCertame({ ...certame, itens: it })} />
+            <ValorGanhoDialog
+                open={!!valorGanhoItem}
+                onOpenChange={(o) => { if (!o) setValorGanhoItem(null); }}
+                item={valorGanhoItem}
+                orcamentoSigiloso={certame.orcamentoSigiloso}
+                margemDesejadaPct={valorGanhoItem ? (valorGanhoItem.margemManualPct ?? context.categorias.find(c => c.id === valorGanhoItem.categoriaId)?.margemPadraoPercent ?? valorGanhoItem.metrics.margemAplicadaPercent) : 0}
+                onSalvar={async (alvo, valorUnit) => {
+                    const itens = certame.itens.map(i => i.id !== alvo.id ? i : valorUnit === null
+                        ? { ...i, precoFinalVendidoReal: null as any, status: i.status === 'GANHO' ? 'PENDENTE' as const : i.status }
+                        : { ...i, precoFinalVendidoReal: valorUnit, status: 'GANHO' as const });
+                    await onUpdateCertame({ ...certame, itens });
+                    toast({ title: valorUnit === null ? 'Valor ganho removido.' : 'Valor ganho salvo. Lucro recalculado.' });
+                }}
+            />
             <ComposicaoDialog open={isComposicaoOpen} onOpenChange={(o) => { setIsComposicaoOpen(o); if (!o) setTimeout(() => setComposicaoItem(null), 300); }} item={composicaoItem} />
             <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
                 <AlertDialogContent>

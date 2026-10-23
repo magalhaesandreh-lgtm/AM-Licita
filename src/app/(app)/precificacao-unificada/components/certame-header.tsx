@@ -29,9 +29,9 @@ function InfoKpi({ label, value, className }: { label: string; value: string; cl
 
 export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProps) {
     const kpis = React.useMemo(() => {
-        let valorReferencia = 0, valorPotencial = 0, lucroPotencial = 0, faturado = 0, pago = 0, lucroRealizadoMes = 0;
+        let valorGanho = 0, lucroGanho = 0, itensGanhos = 0, valorReferencia = 0, valorPotencial = 0, lucroPotencial = 0, faturado = 0, pago = 0, lucroRealizadoMes = 0;
         const activeItems = certame.itens.filter(item => item.status !== 'PERDIDO');
-        activeItems.forEach(item => { valorReferencia += (item.precoReferencia || 0) * item.qtd; valorPotencial += item.metrics.precoFinalUnit * item.qtd; lucroPotencial += item.metrics.lucroTotal; });
+        activeItems.forEach(item => { if (item.precoFinalVendidoReal && item.precoFinalVendidoReal > 0) { itensGanhos++; valorGanho += item.precoFinalVendidoReal * item.qtd; lucroGanho += item.metrics.lucroTotal; } valorReferencia += (item.precoReferencia || 0) * item.qtd; valorPotencial += item.metrics.precoFinalUnit * item.qtd; lucroPotencial += item.metrics.lucroTotal; });
         const hoje = new Date();
         certame.empenhos.forEach(empenho => {
             empenho.nfs.forEach(nf => {
@@ -51,7 +51,7 @@ export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProp
                 if (nf.dataNFISO && parseISO(nf.dataNFISO).getMonth() === hoje.getMonth() && parseISO(nf.dataNFISO).getFullYear() === hoje.getFullYear()) lucroRealizadoMes += l;
             });
         });
-        return { valorReferencia, valorPotencial, lucroPotencial, faturado, pago, saldoReceber: faturado - pago, lucroRealizadoMes };
+        return { valorGanho, lucroGanho, itensGanhos, valorReferencia, valorPotencial, lucroPotencial, faturado, pago, saldoReceber: faturado - pago, lucroRealizadoMes };
     }, [certame]);
 
     return (
@@ -66,6 +66,13 @@ export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProp
                     <InfoKpi label="Total Faturado" value={formatCurrency(kpis.faturado)} />
                     <InfoKpi label="Saldo a Receber" value={formatCurrency(kpis.saldoReceber)} className={kpis.saldoReceber > 0 ? 'text-destructive' : 'text-green-600'} />
                 </div>
+                {kpis.itensGanhos > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <InfoKpi label={`Valor ganho (${kpis.itensGanhos} ${kpis.itensGanhos === 1 ? 'item' : 'itens'})`} value={formatCurrency(kpis.valorGanho)} className="text-amber-600" />
+                        <InfoKpi label="Lucro dos itens ganhos" value={formatCurrency(kpis.lucroGanho)} className={kpis.lucroGanho < 0 ? 'text-destructive' : 'text-green-600'} />
+                        <InfoKpi label="Margem dos itens ganhos" value={kpis.valorGanho > 0 ? `${((kpis.lucroGanho / kpis.valorGanho) * 100).toFixed(2).replace('.', ',')}%` : '-'} />
+                    </div>
+                )}
                 <Separator />
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 text-sm items-start">
                     <div><p className="font-semibold text-muted-foreground">Órgão</p><p>{certame.orgao}</p></div>
