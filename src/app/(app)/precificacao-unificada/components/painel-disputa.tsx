@@ -1,5 +1,7 @@
 'use client';
 
+import { itemAtivo } from '@/lib/models';
+
 import * as React from 'react';
 import { ChevronDown, ChevronUp, Gavel, Search } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { TelaCheia, useTelaCheia } from '@/components/tela-cheia';
 import type { CertameComCalculo } from '@/lib/pricing-calculator';
 import {
     arredondarParaCima, distribuirLote, lanceParaMargem, lucroDoLance, margemDoLance, margemDoValorLote,
@@ -54,7 +57,8 @@ function situacao(margem: number | null, minimo: number, lance: number | null, r
 
 export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
     const [aberto, setAberto] = React.useState(false);
-    const itens = React.useMemo(() => certame.itens.filter(i => i.status !== 'PERDIDO').sort((a, b) => (a.loteNumero || 0) - (b.loteNumero || 0) || a.itemNumero - b.itemNumero), [certame.itens]);
+    const telaCheia = useTelaCheia();
+    const itens = React.useMemo(() => certame.itens.filter(i => itemAtivo(i)).sort((a, b) => (a.loteNumero || 0) - (b.loteNumero || 0) || a.itemNumero - b.itemNumero), [certame.itens]);
     const margemPadrao = React.useMemo(() => {
         const contagem = new Map<number, number>();
         itens.forEach(i => { const m = Math.round((i.margemManualPct ?? i.metrics.margemAplicadaPercent ?? 0) * 100) / 100; contagem.set(m, (contagem.get(m) || 0) + 1); });
@@ -110,17 +114,21 @@ export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
     });
 
     return (
-        <Card>
+        <TelaCheia estado={telaCheia} titulo="Painel de disputa (calculadora de lances)">
+        <Card className={cn(telaCheia.ativo && 'border-0 shadow-none')}>
             <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2">
                 <div>
                     <CardTitle className="flex items-center gap-2"><Gavel className="h-5 w-5" /> Painel de disputa (calculadora de lances)</CardTitle>
                     <CardDescription>Digite o lucro desejado e veja o valor do lance, ou digite o lance e veja o lucro. Só calcula, nada é gravado.</CardDescription>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                {aberto && telaCheia.botao}
                 <Button variant={aberto ? 'outline' : 'default'} onClick={() => setAberto(a => !a)}>
                     {aberto ? <><ChevronUp className="mr-2 h-4 w-4" /> Fechar painel</> : <><ChevronDown className="mr-2 h-4 w-4" /> Abrir painel de disputa</>}
                 </Button>
+                </div>
             </CardHeader>
-            {aberto && (
+            {(aberto || telaCheia.ativo) && (
                 <CardContent className="space-y-5">
                     <div className="grid gap-3 rounded-lg border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="space-y-1">
@@ -158,21 +166,21 @@ export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
                     </div>
 
                     <div className="overflow-x-auto rounded-md border">
-                        <Table>
+                        <Table className="min-w-[1380px]">
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Item</TableHead>
-                                    <TableHead className="min-w-[180px]">Produto</TableHead>
-                                    <TableHead className="text-right">Qtd</TableHead>
-                                    <TableHead className="text-right">Custo total unit.</TableHead>
-                                    <TableHead className="text-right">Preço ref.</TableHead>
-                                    <TableHead className="text-right">Lucro no preço ref.</TableHead>
-                                    <TableHead className="text-right" title="Menor lance que ainda dá o lucro mínimo">Piso (lucro mínimo)</TableHead>
-                                    <TableHead className="w-[110px]">Lucro desejado (%)</TableHead>
-                                    <TableHead className="w-[130px]">Valor do lance (R$)</TableHead>
-                                    <TableHead className="text-right">Lucro unit.</TableHead>
-                                    <TableHead className="text-right">Lucro total</TableHead>
-                                    <TableHead>Situação</TableHead>
+                                    <TableHead className="w-[70px] whitespace-nowrap">Item</TableHead>
+                                    <TableHead className="min-w-[220px]">Produto</TableHead>
+                                    <TableHead className="w-[70px] text-right">Qtd</TableHead>
+                                    <TableHead className="w-[120px] whitespace-nowrap text-right">Custo total unit.</TableHead>
+                                    <TableHead className="w-[100px] whitespace-nowrap text-right">Preço ref.</TableHead>
+                                    <TableHead className="w-[120px] whitespace-nowrap text-right">Lucro no preço ref.</TableHead>
+                                    <TableHead className="w-[120px] whitespace-nowrap text-right" title="Menor lance que ainda dá o lucro mínimo">Piso (lucro mínimo)</TableHead>
+                                    <TableHead className="w-[130px] whitespace-nowrap">Lucro desejado (%)</TableHead>
+                                    <TableHead className="w-[160px] whitespace-nowrap">Valor do lance (R$)</TableHead>
+                                    <TableHead className="w-[110px] whitespace-nowrap text-right">Lucro unit.</TableHead>
+                                    <TableHead className="w-[120px] whitespace-nowrap text-right">Lucro total</TableHead>
+                                    <TableHead className="w-[170px]">Situação</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -191,14 +199,14 @@ export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
                                     return (
                                         <TableRow key={i.id} className={cn(semCusto && 'opacity-60')}>
                                             <TableCell className="whitespace-nowrap tabular-nums">{i.loteNumero ? `L${i.loteNumero} · ` : ''}{i.itemNumero}</TableCell>
-                                            <TableCell className="max-w-[240px] truncate font-medium" title={i.descricao}>{i.descricao}</TableCell>
+                                            <TableCell className="max-w-[280px] truncate font-medium" title={i.descricao}>{i.descricao}</TableCell>
                                             <TableCell className="text-right tabular-nums">{i.qtd.toLocaleString('pt-BR')}</TableCell>
                                             <TableCell className="text-right tabular-nums whitespace-nowrap">{semCusto ? '-' : brl(custo, 4)}</TableCell>
                                             <TableCell className="text-right tabular-nums whitespace-nowrap">{ref === null ? (certame.orcamentoSigiloso ? 'Sigiloso' : '-') : brl(ref)}</TableCell>
                                             <TableCell className={cn('text-right tabular-nums whitespace-nowrap', ref !== null && !semCusto && (margemDoLance(custo, aliquota, ref) ?? 0) < 0 && 'text-destructive')}>{ref === null || semCusto ? '-' : pctTxt(margemDoLance(custo, aliquota, ref))}</TableCell>
                                             <TableCell className="text-right tabular-nums whitespace-nowrap font-medium">{piso === null ? '-' : brl(piso, casas)}</TableCell>
-                                            <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.pct} placeholder="%" onChange={e => mudarPct(i.id, e.target.value, custo, aliquota)} className="h-8 text-right" /></TableCell>
-                                            <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.valor} placeholder="R$" onChange={e => mudarValor(i.id, e.target.value, custo, aliquota)} className="h-8 text-right font-semibold" /></TableCell>
+                                            <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.pct} placeholder="%" onChange={e => mudarPct(i.id, e.target.value, custo, aliquota)} className="h-9 w-[120px] min-w-[120px] text-right text-base" /></TableCell>
+                                            <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.valor} placeholder="R$" onChange={e => mudarValor(i.id, e.target.value, custo, aliquota)} className="h-9 w-[150px] min-w-[150px] text-right text-base font-semibold" /></TableCell>
                                             <TableCell className={cn('text-right tabular-nums whitespace-nowrap', (lucroUnit ?? 0) < 0 && 'text-destructive')}>{lucroUnit === null ? '-' : brl(lucroUnit, 4)}</TableCell>
                                             <TableCell className={cn('text-right tabular-nums whitespace-nowrap', (lucroUnit ?? 0) < 0 && 'text-destructive')}>{lucroUnit === null ? '-' : brl(lucroUnit * i.qtd)}</TableCell>
                                             <TableCell>{semCusto ? <span className="text-xs text-muted-foreground">Informe o custo do item</span> : s ? <Badge className={cn('whitespace-nowrap', s.classe)}>{s.rotulo}</Badge> : null}</TableCell>
@@ -223,8 +231,8 @@ export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
                                             <TableHead className="text-right">Referência do lote</TableHead>
                                             <TableHead className="text-right">Lucro na referência</TableHead>
                                             <TableHead className="text-right">Piso (lucro mínimo)</TableHead>
-                                            <TableHead className="w-[110px]">Lucro desejado (%)</TableHead>
-                                            <TableHead className="w-[150px]">Valor global (R$)</TableHead>
+                                            <TableHead className="w-[130px] whitespace-nowrap">Lucro desejado (%)</TableHead>
+                                            <TableHead className="w-[180px] whitespace-nowrap">Valor global (R$)</TableHead>
                                             <TableHead className="text-right">Lucro</TableHead>
                                             <TableHead>Situação</TableHead>
                                             <TableHead />
@@ -252,9 +260,9 @@ export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
                                                         <TableCell className="text-right tabular-nums whitespace-nowrap">{refTotal === null ? '-' : brl(refTotal)}</TableCell>
                                                         <TableCell className="text-right tabular-nums">{refTotal === null ? '-' : pctTxt(margemDoLance(custo, aliquotaEfetiva, refTotal))}</TableCell>
                                                         <TableCell className="text-right tabular-nums whitespace-nowrap font-medium">{semCusto ? '-' : brl(piso)}</TableCell>
-                                                        <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.pct} placeholder="%" className="h-8 text-right"
+                                                        <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.pct} placeholder="%" className="h-9 w-[120px] min-w-[120px] text-right text-base"
                                                             onChange={e => { const p = lerNumero(e.target.value); const v = p === null ? null : valorLoteParaMargem(base, p); setEntradasLote(x => ({ ...x, [n]: { pct: e.target.value, valor: v === null ? '' : numTxt(arredondarParaCima(v, 2), 2) } })); }} /></TableCell>
-                                                        <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.valor} placeholder="R$" className="h-8 text-right font-semibold"
+                                                        <TableCell><Input inputMode="decimal" disabled={semCusto} value={ent.valor} placeholder="R$" className="h-9 w-[170px] min-w-[170px] text-right text-base font-semibold"
                                                             onChange={e => { const v = lerNumero(e.target.value); const m = v === null ? null : margemDoValorLote(base, v).margemPct; setEntradasLote(x => ({ ...x, [n]: { valor: e.target.value, pct: m === null ? '' : numTxt(m, 2) } })); }} /></TableCell>
                                                         <TableCell className={cn('text-right tabular-nums whitespace-nowrap', (r?.lucro ?? 0) < 0 && 'text-destructive')}>{r ? brl(r.lucro) : '-'}</TableCell>
                                                         <TableCell>{semCusto ? <span className="text-xs text-muted-foreground">Há itens sem custo</span> : s ? <Badge className={cn('whitespace-nowrap', s.classe)}>{s.rotulo}</Badge> : null}</TableCell>
@@ -280,5 +288,6 @@ export function PainelDisputa({ certame }: { certame: CertameComCalculo }) {
                 </CardContent>
             )}
         </Card>
+        </TelaCheia>
     );
 }

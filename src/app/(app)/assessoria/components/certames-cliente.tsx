@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { Categoria, CertameUnificado, ClienteAssessoria, CustosClienteAssessoria, Fornecedor, ItemPrecificacao, Produto } from '@/lib/models';
+import { itemAtivo } from '@/lib/models';
 import { calculateCertamePricing, contextoParaCertame, rateiosPercentuais, type CalculatedItemMetrics, type CertameComCalculo, type FullPricingContext } from '@/lib/pricing-calculator';
 import { custoUnitEfetivo } from '@/lib/custo-real';
 import { certameUnificadoRepository } from '@/lib/repositories/certame-unificado-repository';
@@ -40,7 +41,7 @@ type ResumoCertame = {
 
 /** Mesmas contas do "Resumo do Certame" da planilha principal. */
 function resumir(certame: CertameUnificado, calc: CertameComCalculo | null): ResumoCertame {
-    const ativos = (calc?.itens || []).filter(i => i.status !== 'PERDIDO');
+    const ativos = (calc?.itens || []).filter(i => itemAtivo(i));
     let faturado = 0, lucroRealizado = 0;
     (certame.empenhos || []).forEach(empenho => {
         (empenho.nfs || []).forEach(nf => {

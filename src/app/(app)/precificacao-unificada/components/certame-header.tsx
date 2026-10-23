@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { CertameUnificado } from '@/lib/models';
+import { itemAtivo } from '@/lib/models';
 import type { CertameComCalculo } from '@/lib/pricing-calculator';
 import { custoUnitEfetivo } from '@/lib/custo-real';
 
@@ -30,7 +31,7 @@ function InfoKpi({ label, value, className }: { label: string; value: string; cl
 export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProps) {
     const kpis = React.useMemo(() => {
         let valorGanho = 0, lucroGanho = 0, itensGanhos = 0, valorReferencia = 0, valorPotencial = 0, lucroPotencial = 0, faturado = 0, pago = 0, lucroRealizadoMes = 0;
-        const activeItems = certame.itens.filter(item => item.status !== 'PERDIDO');
+        const activeItems = certame.itens.filter(item => itemAtivo(item));
         activeItems.forEach(item => { if (item.precoFinalVendidoReal && item.precoFinalVendidoReal > 0) { itensGanhos++; valorGanho += item.precoFinalVendidoReal * item.qtd; lucroGanho += item.metrics.lucroTotal; } valorReferencia += (item.precoReferencia || 0) * item.qtd; valorPotencial += item.metrics.precoFinalUnit * item.qtd; lucroPotencial += item.metrics.lucroTotal; });
         const hoje = new Date();
         certame.empenhos.forEach(empenho => {
@@ -60,7 +61,7 @@ export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProp
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
                     <InfoKpi label="Valor de Referência (Edital)" value={certame.orcamentoSigiloso ? 'Sigiloso' : formatCurrency(kpis.valorReferencia)} />
-                    <InfoKpi label="Valor Potencial" value={formatCurrency(kpis.valorPotencial)} />
+                    <InfoKpi label={kpis.itensGanhos > 0 ? 'Valor Potencial (ganhos + em disputa)' : 'Valor Potencial'} value={formatCurrency(kpis.valorPotencial)} />
                     <InfoKpi label="Lucro Potencial" value={formatCurrency(kpis.lucroPotencial)} />
                     <InfoKpi label="Lucro Realizado (Mês)" value={formatCurrency(kpis.lucroRealizadoMes)} />
                     <InfoKpi label="Total Faturado" value={formatCurrency(kpis.faturado)} />
@@ -68,7 +69,7 @@ export function CertameHeader({ certame, onUpdate, clientes }: CertameHeaderProp
                 </div>
                 {kpis.itensGanhos > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                        <InfoKpi label={`Valor ganho (${kpis.itensGanhos} ${kpis.itensGanhos === 1 ? 'item' : 'itens'})`} value={formatCurrency(kpis.valorGanho)} className="text-amber-600" />
+                        <InfoKpi label={`Valor da ata: ${kpis.itensGanhos} ${kpis.itensGanhos === 1 ? 'item ganho' : 'itens ganhos'} × quantidade`} value={formatCurrency(kpis.valorGanho)} className="text-amber-600" />
                         <InfoKpi label="Lucro dos itens ganhos" value={formatCurrency(kpis.lucroGanho)} className={kpis.lucroGanho < 0 ? 'text-destructive' : 'text-green-600'} />
                         <InfoKpi label="Margem dos itens ganhos" value={kpis.valorGanho > 0 ? `${((kpis.lucroGanho / kpis.valorGanho) * 100).toFixed(2).replace('.', ',')}%` : '-'} />
                     </div>

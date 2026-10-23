@@ -24,7 +24,7 @@ const itemFormSchema = z.object({
     loteNumero: z.number().optional().nullable(),
     descricao: z.string().min(1),
     categoriaId: z.string().min(1),
-    status: z.enum(['PENDENTE', 'GANHO', 'PERDIDO']),
+    status: z.enum(['PENDENTE', 'GANHO', 'PERDIDO', 'NAO_PARTICIPOU']),
     unidade: z.string().min(1),
     qtd: z.number().min(0.0001),
     custoUnitBase: z.number().min(0),
@@ -162,9 +162,10 @@ export function ItemFormDialog({ open, onOpenChange, certame, item, context, onS
                             <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                 <SelectContent>
-                                    <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-                                    <SelectItem value="GANHO">GANHO</SelectItem>
-                                    <SelectItem value="PERDIDO">PERDIDO</SelectItem>
+                                    <SelectItem value="PENDENTE">Participando (sem resultado)</SelectItem>
+                                    <SelectItem value="GANHO">Ganho</SelectItem>
+                                    <SelectItem value="PERDIDO">Perdido</SelectItem>
+                                    <SelectItem value="NAO_PARTICIPOU">Não participou</SelectItem>
                                 </SelectContent>
                             </Select>
                             <FormMessage />

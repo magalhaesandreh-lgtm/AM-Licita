@@ -73,7 +73,11 @@ export interface ItemPrecificacao {
     precoReferencia?: number;
     precoFinalVendidoReal?: number;
     precoAnteriorAjusteLote?: number;
-    status: 'PENDENTE' | 'GANHO' | 'PERDIDO';
+    /**
+     * PENDENTE: participa, sem resultado; GANHO: venceu (preço em precoFinalVendidoReal); PERDIDO: disputou e perdeu;
+     * NAO_PARTICIPOU: item do edital que a empresa não disputou. PERDIDO e NAO_PARTICIPOU ficam fora dos totais.
+     */
+    status: 'PENDENTE' | 'GANHO' | 'PERDIDO' | 'NAO_PARTICIPOU';
     // Legacy fields mapped for safety
     lucroReal?: number;
     margemRealPct?: number;
@@ -448,3 +452,15 @@ export interface CustosClienteAssessoria extends BaseEntity {
   custosVariaveis: CustoVariavelCliente[];
   observacoes?: string;
 }
+
+/** Item que entra nos totais do certame (participa da disputa ou foi ganho). */
+export function itemAtivo(item: Pick<ItemPrecificacao, 'status'>): boolean {
+    return item.status !== 'PERDIDO' && item.status !== 'NAO_PARTICIPOU';
+}
+
+export const STATUS_ITEM_LABEL: Record<ItemPrecificacao['status'], string> = {
+    PENDENTE: 'Participando',
+    GANHO: 'Ganho',
+    PERDIDO: 'Perdido',
+    NAO_PARTICIPOU: 'Não participou',
+};

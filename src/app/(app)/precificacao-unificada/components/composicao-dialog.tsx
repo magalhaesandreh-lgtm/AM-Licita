@@ -24,7 +24,7 @@ export function ComposicaoDialog({ open, onOpenChange, item: incomingItem }: Com
     const m = item.metrics;
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto" onCloseAutoFocus={e => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
                 <DialogHeader>
                     <DialogTitle>Composição do Item {item.itemNumero}</DialogTitle>
                     <DialogDescription>{item.descricao}</DialogDescription>
