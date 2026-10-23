@@ -33,14 +33,18 @@ interface ValorGanhoDialogProps {
  * Informar o valor ganho na licitação e ver, na hora, o resultado inverso: com o custo cadastrado
  * (custos do cliente ou da AM), quanto de lucro e de margem esse valor dá.
  */
-export function ValorGanhoDialog({ open, onOpenChange, item, margemDesejadaPct, orcamentoSigiloso, onSalvar }: ValorGanhoDialogProps) {
+export function ValorGanhoDialog({ open, onOpenChange, item: itemRecebido, margemDesejadaPct, orcamentoSigiloso, onSalvar }: ValorGanhoDialogProps) {
+    // Mantém o último item durante a animação de fechamento (evita desmontar o diálogo aberto e travar a página).
+    const ultimo = React.useRef<ItemCalc | null>(itemRecebido);
+    if (itemRecebido) ultimo.current = itemRecebido;
+    const item = itemRecebido || ultimo.current;
     const [modo, setModo] = React.useState<'UNIT' | 'TOTAL'>('UNIT');
     const [valor, setValor] = React.useState<number>(0);
     const [salvando, setSalvando] = React.useState(false);
 
     React.useEffect(() => {
-        if (open && item) { setModo('UNIT'); setValor(item.precoFinalVendidoReal || 0); }
-    }, [open, item]);
+        if (open && itemRecebido) { setModo('UNIT'); setValor(itemRecebido.precoFinalVendidoReal || 0); }
+    }, [open, itemRecebido]);
 
     if (!item) return <Dialog open={open} onOpenChange={onOpenChange} />;
 
@@ -73,13 +77,13 @@ export function ValorGanhoDialog({ open, onOpenChange, item, margemDesejadaPct, 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl">
-                <DialogHeader>
+            <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col overflow-hidden p-0" onCloseAutoFocus={e => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+                <DialogHeader className="shrink-0 px-6 pt-6">
                     <DialogTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" /> Valor ganho na licitação · Item {item.itemNumero}</DialogTitle>
                     <DialogDescription className="line-clamp-2">{item.descricao}</DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-2">
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="flex rounded-md border p-0.5">
                             <Button type="button" size="sm" variant={modo === 'UNIT' ? 'default' : 'ghost'} onClick={() => { if (modo !== 'UNIT') { setValor(qtd > 0 ? valor / qtd : 0); setModo('UNIT'); } }}>Valor unitário</Button>
@@ -110,7 +114,7 @@ export function ValorGanhoDialog({ open, onOpenChange, item, margemDesejadaPct, 
                     <p className="text-xs text-muted-foreground">Ao salvar, o item fica como GANHO e a planilha, o resumo do certame, os relatórios e o empenho passam a usar o valor ganho. Os custos continuam sendo os cadastrados (do cliente ou da AM Contratos).</p>
                 </div>
 
-                <DialogFooter className="gap-2 sm:justify-between">
+                <DialogFooter className="shrink-0 gap-2 border-t px-6 py-4 sm:justify-between">
                     {item.precoFinalVendidoReal ? <Button variant="outline" className="text-destructive" disabled={salvando} onClick={() => salvar(null)}>Remover valor ganho</Button> : <span />}
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>

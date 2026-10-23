@@ -3,6 +3,7 @@ import type jsPDF from 'jspdf';
 import { addDays, format as formatDate, parseISO } from 'date-fns';
 import type { CertameComCalculo, FullPricingContext } from '@/lib/pricing-calculator';
 import type { ClienteAssessoria, Empenho, Fornecedor } from './models';
+import { itemAtivo } from './models';
 import { custoUnitEfetivo } from '@/lib/custo-real';
 import { criarPdfTimbrado, MARGEM_TIMBRADO, numerarPaginas } from '@/lib/pdf/timbrado';
 import { analisarExequibilidade, brl, explicarCustos, nomeCurto, pct, ROTULO_SITUACAO, type AnaliseItem, type SituacaoItem } from '@/lib/pdf/analise-exequibilidade';
@@ -266,7 +267,7 @@ const STATUS_CERTAME: Record<string, string> = { EM_ANDAMENTO: 'em andamento', G
 
 export const generateFinanceiroPdf = (certame: CertameComCalculo, empresa?: ClienteAssessoria | null, opcoes: OpcoesRelatorio = {}) => {
     const doc = criarPdfTimbrado();
-    const ativos = certame.itens.filter(i => i.status !== 'PERDIDO');
+    const ativos = certame.itens.filter(i => itemAtivo(i));
     const analise = analisarExequibilidade(certame, opcoes.contexto);
     const totalVenda = ativos.reduce((t, i) => t + i.metrics.precoFinalUnit * i.qtd, 0);
     const totalCusto = ativos.reduce((t, i) => t + i.metrics.custoTotalUnit * i.qtd, 0);

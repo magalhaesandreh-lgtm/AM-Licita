@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, MoreHorizontal, FileDown, Trash2, Pencil, RotateCcw, Check, Scale, Trophy } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, FileDown, Trash2, Pencil, RotateCcw, Check, Scale, Trophy, ClipboardList } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,10 +15,14 @@ import { useUser } from '@/firebase';
 import { cn, formatCurrency, parseCurrency } from '@/lib/utils';
 import { generatePrecificacaoPdf } from '@/lib/pdf-generator';
 import type { ItemPrecificacao, Produto, Categoria, Fornecedor, CertameUnificado } from '@/lib/models';
+import { itemAtivo } from '@/lib/models';
 import type { CalculatedItemMetrics, CertameComCalculo, FullPricingContext } from '@/lib/pricing-calculator';
 import { ItemFormDialog } from './item-form-dialog';
 import { ComposicaoDialog } from './composicao-dialog';
 import { ValorGanhoDialog } from './valor-ganho-dialog';
+import { ResultadoDisputaDialog } from './resultado-disputa-dialog';
+import { TelaCheia, useTelaCheia } from '@/components/tela-cheia';
+import { STATUS_ITEM_LABEL } from '@/lib/models';
 import {
     type PricingTableItem,
     EMPTY_TABLE_VALUE,
@@ -48,6 +52,8 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
     const [isComposicaoOpen, setIsComposicaoOpen] = React.useState(false);
     const [valorGanhoItem, setValorGanhoItem] = React.useState<(ItemPrecificacao & { metrics: CalculatedItemMetrics }) | null>(null);
+    const [isResultadoOpen, setIsResultadoOpen] = React.useState(false);
+    const telaCheia = useTelaCheia();
     const [editingItem, setEditingItem] = React.useState<ItemPrecificacao | null>(null);
     const [deletingItem, setDeletingItem] = React.useState<ItemPrecificacao | null>(null);
     const [composicaoItem, setComposicaoItem] = React.useState<(ItemPrecificacao & { metrics: CalculatedItemMetrics }) | null>(null);
@@ -72,7 +78,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
         const targetTotal = parseCurrency(loteInputs[loteNumero] || '0');
         const items = itemsByLot.get(loteNumero);
         if (!items || items.length === 0 || targetTotal <= 0) return toast({ title: "Valor inválido", variant: "destructive" });
-        const activeItems = items.filter(i => i.status !== 'PERDIDO');
+        const activeItems = items.filter(i => itemAtivo(i));
         const currentTotal = activeItems.reduce((sum, i) => sum + (i.metrics.precoFinalUnit * i.qtd), 0);
         if (currentTotal === 0) return toast({ title: "Lote sem valor", variant: "destructive" });
         const factor = targetTotal / currentTotal;
@@ -80,7 +86,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
         let heaviestIndexInLot = -1;
         let maxItemTotal = -1;
         const updatedItems = certame.itens.map((item, index) => {
-            if (item.loteNumero !== loteNumero || item.status === 'PERDIDO') return item;
+            if (item.loteNumero !== loteNumero || !itemAtivo(item)) return item;
             const newUnit = Math.round((item.metrics.precoFinalUnit * factor) * 100) / 100;
             const newTotal = newUnit * item.qtd;
             sumOfNewTotals += newTotal;
@@ -114,8 +120,8 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
     const confirmDeleteItem = async () => { if (!deletingItem) return; await onUpdateCertame({ ...certame, itens: certame.itens.filter(i => i.id !== deletingItem.id) }); setIsDeleteAlertOpen(false); setDeletingItem(null); };
 
     const columns: ColumnDef<PricingTableItem>[] = React.useMemo(() => [
-        { accessorKey: 'itemNumero', header: 'Item', cell: (row) => <span className={cn("block w-12 whitespace-nowrap", row.status === 'PERDIDO' && 'text-muted-foreground line-through')}>{formatTableNumber(row.itemNumero, 0)}</span> },
-        { accessorKey: 'descricao', header: 'Descrição', cell: (row) => <div className={cn("w-[280px] min-w-[220px] max-w-[360px] truncate font-medium", row.status === 'PERDIDO' && 'text-muted-foreground line-through')} title={row.descricao}>{row.descricao || EMPTY_TABLE_VALUE}</div> },
+        { accessorKey: 'itemNumero', header: 'Item', cell: (row) => <span className={cn("block w-12 whitespace-nowrap", !itemAtivo(row) && 'text-muted-foreground line-through')}>{formatTableNumber(row.itemNumero, 0)}</span> },
+        { accessorKey: 'descricao', header: 'Descrição', cell: (row) => <div className={cn("w-[280px] min-w-[220px] max-w-[360px] truncate font-medium", !itemAtivo(row) && 'text-muted-foreground line-through')} title={row.descricao}>{row.descricao || EMPTY_TABLE_VALUE}</div> },
         { accessorKey: 'unidade', header: 'Unid.', cell: (row) => <span className="block w-14 whitespace-nowrap">{row.unidade || EMPTY_TABLE_VALUE}</span> },
         { accessorKey: 'qtd', header: 'Qtd. Ref.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableNumber(row.qtd)}</span> },
         { accessorKey: 'precoReferencia', header: 'Preço Ref.', align: 'right', cell: (row) => <span className="whitespace-nowrap tabular-nums">{formatTableCurrency(row.precoReferencia)}</span> },
@@ -133,9 +139,9 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                 </Badge>
             );
         }},
-        { accessorKey: 'status', header: 'Status', cell: (row) => <Badge variant={row.status === 'GANHO' ? 'default' : row.status === 'PERDIDO' ? 'destructive' : 'secondary'} className={cn("whitespace-nowrap", row.status === 'GANHO' && 'bg-green-600')}>{row.status || EMPTY_TABLE_VALUE}</Badge> },
+        { accessorKey: 'status', header: 'Status', cell: (row) => <Badge variant={row.status === 'GANHO' ? 'default' : row.status === 'PERDIDO' ? 'destructive' : row.status === 'NAO_PARTICIPOU' ? 'outline' : 'secondary'} className={cn("whitespace-nowrap", row.status === 'GANHO' && 'bg-green-600', row.status === 'NAO_PARTICIPOU' && 'text-muted-foreground')}>{STATUS_ITEM_LABEL[row.status] || row.status || EMPTY_TABLE_VALUE}</Badge> },
         { accessorKey: 'actions', header: 'Ações', align: 'right', cell: (row) => (
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleViewComposicao(row)}><Scale className="mr-2 h-4 w-4" />Composição</DropdownMenuItem>
@@ -148,10 +154,13 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
     ], []);
 
     return (
-        <Card>
-            <CardHeader className="flex-row items-center justify-between">
-                <div><CardTitle>Itens (Planilha)</CardTitle><CardDescription>Defina os preços base de cada item.</CardDescription></div>
-                <div className="flex gap-2">
+        <TelaCheia estado={telaCheia} titulo="Itens (Planilha)">
+        <Card className={cn(telaCheia.ativo && 'border-0 shadow-none')}>
+            <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+                <div><CardTitle>Itens (Planilha)</CardTitle><CardDescription>Defina os preços base de cada item. Linhas riscadas: perdidos ou sem participação (fora dos totais).</CardDescription></div>
+                <div className="flex flex-wrap gap-2">
+                    {telaCheia.botao}
+                    <Button variant="outline" onClick={() => setIsResultadoOpen(true)} title="Marcar em quais itens participou, quais ganhou e o valor ganho"><ClipboardList /> Resultado da disputa</Button>
                     <Button variant="outline" onClick={() => generatePrecificacaoPdf(certame, context.fornecedores, context.clientes.find(c => c.id === certame.empresaDestinoId), { contexto: pricingContext, custosDe })} title="Relatório de exequibilidade explicado, no timbrado, pronto para enviar ao cliente"><FileDown /> Relatório PDF</Button>
                     <Button onClick={handleNewItem}><PlusCircle /> Novo Item</Button>
                 </div>
@@ -162,7 +171,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                         <div><h3 className="text-lg font-semibold mb-2">Itens Unitários</h3><DataTable columns={columns} data={standaloneItems} /></div>
                     )}
                     {[...itemsByLot.entries()].map(([loteNumero, items]) => {
-                        const activeItems = items.filter(i => i.status !== 'PERDIDO');
+                        const activeItems = items.filter(i => itemAtivo(i));
                         const totalLote = activeItems.reduce((sum, i) => sum + (i.metrics.precoFinalUnit * i.qtd), 0);
                         const inputVal = parseCurrency(loteInputs[loteNumero] || '0');
                         const diff = inputVal > 0 ? inputVal - totalLote : 0;
@@ -196,6 +205,7 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                 </div>
             </CardContent>
             <ItemFormDialog open={isItemFormOpen} onOpenChange={(o) => { setIsItemFormOpen(o); if (!o) setTimeout(() => setEditingItem(null), 300); }} certame={certame} item={editingItem} context={context} aliquotaPadrao={aliquotaPadrao} onSuccess={(it) => onUpdateCertame({ ...certame, itens: it })} />
+            <ResultadoDisputaDialog open={isResultadoOpen} onOpenChange={setIsResultadoOpen} certame={certame} onSalvar={async (itens) => { await onUpdateCertame({ ...certame, itens }); toast({ title: 'Resultado da disputa salvo. Totais recalculados sobre os itens ganhos e em disputa.' }); }} />
             <ValorGanhoDialog
                 open={!!valorGanhoItem}
                 onOpenChange={(o) => { if (!o) setValorGanhoItem(null); }}
@@ -218,5 +228,6 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                 </AlertDialogContent>
             </AlertDialog>
         </Card>
+        </TelaCheia>
     );
 }

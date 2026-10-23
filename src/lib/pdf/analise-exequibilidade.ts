@@ -1,4 +1,5 @@
 import type { CertameUnificado, ItemPrecificacao } from '@/lib/models';
+import { itemAtivo } from '@/lib/models';
 import { rateiosPercentuais, type CalculatedItemMetrics, type CertameComCalculo, type FullPricingContext } from '@/lib/pricing-calculator';
 
 /**
@@ -109,7 +110,7 @@ export function explicarCustos(contexto: FullPricingContext | null | undefined, 
 
 export function analisarExequibilidade(certame: CertameComCalculo, contexto?: FullPricingContext | null): ResumoExequibilidade {
     const overheadPct = contexto ? rateiosPercentuais(contexto).overheadPct : null;
-    const ativos = certame.itens.filter(i => i.status !== 'PERDIDO') as ItemCalc[];
+    const ativos = certame.itens.filter(i => itemAtivo(i)) as ItemCalc[];
     const itens: AnaliseItem[] = ativos.map(item => {
         const m = item.metrics;
         const nome = nomeCurto(item.descricao);

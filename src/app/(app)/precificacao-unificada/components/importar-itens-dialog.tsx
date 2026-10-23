@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { formatCurrency } from '@/lib/utils';
 import type { Empenho, EmpenhoItem } from '@/lib/models';
+import { itemAtivo } from '@/lib/models';
 
 interface ImportarItensDialogProps {
     open: boolean;
@@ -71,7 +72,7 @@ export function ImportarItensDialog({ open, onOpenChange, certameItens, empenho,
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {certameItens.filter((i: any) => i.status !== 'PERDIDO').map((i: any) => (
+                                {certameItens.filter((i: any) => itemAtivo(i)).map((i: any) => (
                                     <TableRow key={i.id} className="hover:bg-muted/50 transition-colors border-b">
                                         <TableCell>
                                             <Checkbox onCheckedChange={(c) => setSel(prev => ({ ...prev, [i.id]: { selected: !!c, qtd: i.qtd } }))} />

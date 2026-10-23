@@ -12,10 +12,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { menuItems } from '@/lib/menu-items';
-import { LogOut, User, PanelLeft } from 'lucide-react';
+import { LogOut, User, PanelLeft, Maximize2, Minimize2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ThemeToggle } from '../theme-toggle';
 import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
@@ -27,7 +27,20 @@ export function Header() {
   const router = useRouter();
   const auth = useAuth();
   const { profile } = useUser();
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, setOpen } = useSidebar();
+  // Tela cheia do sistema inteiro (qualquer módulo): recolhe o menu e usa a tela cheia do navegador.
+  const [telaCheia, setTelaCheia] = useState(false);
+  useEffect(() => {
+    const sync = () => setTelaCheia(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+  const alternarTelaCheia = async () => {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); setOpen(true); }
+      else { setOpen(false); await document.documentElement.requestFullscreen(); }
+    } catch { setTelaCheia(t => !t); }
+  };
 
   const pageTitle = useMemo(() => {
     // Dynamic title for client detail page
@@ -72,6 +85,10 @@ export function Header() {
       <h1 className="text-xl font-semibold md:text-2xl">{pageTitle}</h1>
 
       <div className="ml-auto flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={alternarTelaCheia} title={telaCheia ? 'Sair da tela cheia' : 'Tela cheia (recolhe o menu e amplia a tela)'}>
+          {telaCheia ? <Minimize2 /> : <Maximize2 />}
+          <span className="sr-only">Tela cheia</span>
+        </Button>
         <ThemeToggle />
         <NotificationDropdown />
         <DropdownMenu>
