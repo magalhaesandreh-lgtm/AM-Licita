@@ -273,7 +273,11 @@ export function calculateCertamePricing(
     return estimarCustoRetroativo(item.precoFinalVendidoReal as number, item.aliquotaPct, margem, rateios).custoBaseUnit;
   };
 
-  const subtotalCustoCertame = safeCertame.itens.reduce((acc, item) => acc + (baseParaRateio(item) * item.qtd), 0);
+  // Itens perdidos ou em que a empresa não participou não recebem frete nem custos do certame: o portal, o
+  // combustível etc. ficam só nos itens em disputa e nos ganhos (decisão de 24/10/2026).
+  const entraNoRateio = (item: ItemPrecificacao) => item.status !== 'PERDIDO' && item.status !== 'NAO_PARTICIPOU';
+  const itensRateio = safeCertame.itens.filter(entraNoRateio);
+  const subtotalCustoCertame = itensRateio.reduce((acc, item) => acc + (baseParaRateio(item) * item.qtd), 0);
 
   const freteCertame = (context.configuracoes.fretePadraoPercent / 100) * subtotalCustoCertame;
   
@@ -308,7 +312,7 @@ export function calculateCertamePricing(
     const mutableItem = { ...item };
 
     const itemCustoTotalBase = baseParaRateio(mutableItem) * mutableItem.qtd;
-    const itemProportion = subtotalCustoCertame > 0 ? itemCustoTotalBase / subtotalCustoCertame : (1 / (safeCertame.itens.length || 1));
+    const itemProportion = !entraNoRateio(mutableItem) ? 0 : subtotalCustoCertame > 0 ? itemCustoTotalBase / subtotalCustoCertame : (1 / (itensRateio.length || 1));
 
     // Update the item's apportioned costs for this calculation session
     mutableItem.freteUnitario = mutableItem.qtd > 0 ? (freteCertame * itemProportion) / mutableItem.qtd : 0;
