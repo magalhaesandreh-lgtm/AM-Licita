@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ClipboardList, Loader2 } from 'lucide-react';
+import { ClipboardList, FileCheck2, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,9 +47,11 @@ interface Props {
     onOpenChange: (open: boolean) => void;
     certame: CertameComCalculo;
     onSalvar: (itens: ItemPrecificacao[]) => Promise<void>;
+    /** Salva e baixa o Relatório do Resultado com os itens já atualizados. */
+    onBaixarRelatorio?: (itens: ItemPrecificacao[]) => void;
 }
 
-export function ResultadoDisputaDialog({ open, onOpenChange, certame, onSalvar }: Props) {
+export function ResultadoDisputaDialog({ open, onOpenChange, certame, onSalvar, onBaixarRelatorio }: Props) {
     const itens = React.useMemo(() => [...certame.itens].sort((a, b) => (a.loteNumero || 0) - (b.loteNumero || 0) || a.itemNumero - b.itemNumero), [certame.itens]);
     const [linhas, setLinhas] = React.useState<Record<string, Linha>>({});
     const [salvando, setSalvando] = React.useState(false);
@@ -81,7 +83,7 @@ export function ResultadoDisputaDialog({ open, onOpenChange, certame, onSalvar }
         return { participando, ganhos, perdidos, fora, valorAta, lucroAta, semValor };
     }, [itens, linhas]);
 
-    const salvar = async () => {
+    const salvar = async (baixar = false) => {
         setSalvando(true);
         try {
             const novos = certame.itens.map(item => {
@@ -96,6 +98,7 @@ export function ResultadoDisputaDialog({ open, onOpenChange, certame, onSalvar }
                 return { ...resto, status: l.resultado, precoFinalVendidoReal: null as any };
             });
             await onSalvar(novos);
+            if (baixar && onBaixarRelatorio) onBaixarRelatorio(novos);
             onOpenChange(false);
         } finally {
             setSalvando(false);
@@ -181,7 +184,12 @@ export function ResultadoDisputaDialog({ open, onOpenChange, certame, onSalvar }
 
                 <DialogFooter className="shrink-0 px-6 pb-6 pt-3">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={salvando}>Cancelar</Button>
-                    <Button onClick={salvar} disabled={salvando}>{salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar resultado</Button>
+                    {onBaixarRelatorio && (
+                        <Button variant="secondary" onClick={() => salvar(true)} disabled={salvando || resumo.ganhos === 0} title={resumo.ganhos === 0 ? 'Marque ao menos um item ganho' : 'Salva o resultado e baixa o PDF no timbrado'}>
+                            {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}Salvar e baixar relatório do resultado
+                        </Button>
+                    )}
+                    <Button onClick={() => salvar(false)} disabled={salvando}>{salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar resultado</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
