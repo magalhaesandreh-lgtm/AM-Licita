@@ -14,7 +14,7 @@ import { custosClienteRepository } from '@/lib/repositories/custos-cliente-repos
 import { custosDeCertame, analisarExequibilidade, ROTULO_SITUACAO } from '@/lib/pdf/analise-exequibilidade';
 import type { CustosClienteAssessoria } from '@/lib/models';
 import { calculateCertamePricing, contextoParaCertame, type CertameComCalculo, type FullPricingContext } from '@/lib/pricing-calculator';
-import { generatePrecificacaoPdf, generateExecucaoPdf, generateFinanceiroPdf } from '@/lib/pdf-generator';
+import { generatePrecificacaoPdf, generateExecucaoPdf, generateFinanceiroPdf, generateResultadoPdf } from '@/lib/pdf-generator';
 import { exportToCsv, numeroBr, dataBr as dataBrCsv } from '@/lib/csv-exporter';
 import { formatCurrency } from '@/lib/utils';
 import { impostoRepository } from '@/lib/repositories/imposto-repository';
@@ -160,6 +160,14 @@ export default function RelatoriosPage() {
     const empresa = clientes.find(e => e.id === selectedCertame.empresaDestinoId);
     generatePrecificacaoPdf(selectedCertame, fornecedores, empresa, opcoesRelatorio());
     toast({ title: 'PDF de Precificação gerado!' });
+  }
+
+  const handleResultadoPdf = () => {
+    if (!selectedCertame) return;
+    if (!selectedCertame.itens.some(i => i.status === 'GANHO')) { toast({ title: 'Nenhum item ganho lançado neste certame.', description: 'Use "Resultado da disputa" na planilha do certame.', variant: 'destructive' }); return; }
+    const empresa = clientes.find(e => e.id === selectedCertame.empresaDestinoId);
+    generateResultadoPdf(selectedCertame, empresa, opcoesRelatorio());
+    toast({ title: 'Relatório do resultado gerado!' });
   }
 
   const handleFinanceiroPdf = () => {
@@ -328,10 +336,14 @@ export default function RelatoriosPage() {
               </CardContent>
           </Card>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <Card>
                   <CardHeader><CardTitle>Exequibilidade</CardTitle><CardDescription>Para o cliente: quais itens compensam, por que os outros não compensam, como o preço foi calculado e o que significa cada termo.</CardDescription></CardHeader>
                   <CardContent><Button onClick={handlePrecificacaoPdf} className="w-full">Gerar relatório de exequibilidade</Button></CardContent>
+              </Card>
+              <Card>
+                  <CardHeader><CardTitle>Resultado da licitação</CardTitle><CardDescription>Depois do pregão: itens ganhos, valor da ata, lucro e margem, limite de compra de cada produto e próximos passos.</CardDescription></CardHeader>
+                  <CardContent><Button onClick={handleResultadoPdf} className="w-full">Gerar relatório do resultado</Button></CardContent>
               </Card>
               <Card>
                   <CardHeader><CardTitle>Relatório Financeiro</CardTitle><CardDescription>Faturamento, custos, imposto e lucro previstos; o que já foi pedido, faturado e recebido; resultado por item.</CardDescription></CardHeader>

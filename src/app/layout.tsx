@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from '@/components/theme-provider';
 import { FirebaseClientProvider } from '@/firebase';
+import { DesbloqueioPagina } from '@/components/desbloqueio-pagina';
 
 export const metadata: Metadata = {
   title: 'AM Licitações - MVP',
@@ -31,6 +32,7 @@ export default function RootLayout({
           <FirebaseClientProvider>
             {children}
             <Toaster />
+            <DesbloqueioPagina />
           </FirebaseClientProvider>
         </ThemeProvider>
       </body>

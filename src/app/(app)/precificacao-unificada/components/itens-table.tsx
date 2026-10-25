@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, MoreHorizontal, FileDown, Trash2, Pencil, RotateCcw, Check, Scale, Trophy, ClipboardList } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, FileDown, Trash2, Pencil, RotateCcw, Check, Scale, Trophy, ClipboardList, FileCheck2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
 import { cn, formatCurrency, parseCurrency } from '@/lib/utils';
-import { generatePrecificacaoPdf } from '@/lib/pdf-generator';
+import { generatePrecificacaoPdf, generateResultadoPdf } from '@/lib/pdf-generator';
 import type { ItemPrecificacao, Produto, Categoria, Fornecedor, CertameUnificado } from '@/lib/models';
 import { itemAtivo } from '@/lib/models';
 import type { CalculatedItemMetrics, CertameComCalculo, FullPricingContext } from '@/lib/pricing-calculator';
@@ -161,7 +161,8 @@ export function ItensTable({ certame, context, onUpdateCertame, aliquotaPadrao, 
                 <div className="flex flex-wrap gap-2">
                     {telaCheia.botao}
                     <Button variant="outline" onClick={() => setIsResultadoOpen(true)} title="Marcar em quais itens participou, quais ganhou e o valor ganho"><ClipboardList /> Resultado da disputa</Button>
-                    <Button variant="outline" onClick={() => generatePrecificacaoPdf(certame, context.fornecedores, context.clientes.find(c => c.id === certame.empresaDestinoId), { contexto: pricingContext, custosDe })} title="Relatório de exequibilidade explicado, no timbrado, pronto para enviar ao cliente"><FileDown /> Relatório PDF</Button>
+                    <Button variant="outline" onClick={() => generatePrecificacaoPdf(certame, context.fornecedores, context.clientes.find(c => c.id === certame.empresaDestinoId), { contexto: pricingContext, custosDe })} title="Relatório de exequibilidade explicado, no timbrado, pronto para enviar ao cliente"><FileDown /> Relatório de exequibilidade</Button>
+                    <Button variant="outline" disabled={!certame.itens.some(i => i.status === 'GANHO')} onClick={() => generateResultadoPdf(certame, context.clientes.find(c => c.id === certame.empresaDestinoId), { contexto: pricingContext, custosDe })} title="Depois do pregão: itens ganhos, valor da ata, lucro, limites de compra e próximos passos"><FileCheck2 /> Relatório do resultado</Button>
                     <Button onClick={handleNewItem}><PlusCircle /> Novo Item</Button>
                 </div>
             </CardHeader>

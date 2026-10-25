@@ -6,7 +6,14 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+/**
+ * Menu suspenso NÃO modal por padrão. No modo modal, o Radix coloca "pointer-events: none" no body; se o
+ * item do menu abre um diálogo, ao fechar o diálogo a página pode ficar travada (não clicável). Quem
+ * precisar do modo modal passa modal={true}.
+ */
+const DropdownMenu = ({ modal = false, ...props }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root>) => (
+  <DropdownMenuPrimitive.Root modal={modal} {...props} />
+)
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 

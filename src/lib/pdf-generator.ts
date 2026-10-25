@@ -5,6 +5,7 @@ import type { CertameComCalculo, FullPricingContext } from '@/lib/pricing-calcul
 import type { ClienteAssessoria, Empenho, Fornecedor } from './models';
 import { itemAtivo } from './models';
 import { custoUnitEfetivo } from '@/lib/custo-real';
+import { calcularExitoHibrido, calcularExitoPorFaixa } from '@/lib/assessoria/fee-calculator';
 import { criarPdfTimbrado, MARGEM_TIMBRADO, numerarPaginas } from '@/lib/pdf/timbrado';
 import { analisarExequibilidade, brl, explicarCustos, nomeCurto, pct, ROTULO_SITUACAO, type AnaliseItem, type SituacaoItem } from '@/lib/pdf/analise-exequibilidade';
 import { assinaturaAm, COR_AZUL, destaque, marcador, paragrafo, quadros, secao, SITUACAO_CORES, tituloRelatorio } from '@/lib/pdf/relatorio-base';
@@ -417,4 +418,159 @@ export const generateExecucaoPdf = (certame: CertameComCalculo) => {
 
     numerarPaginas(doc);
     doc.save(nomeArquivo('relatorio_execucao', certame));
+};
+
+// ════════════════════════════════════════════════════════════════════════
+// 4. RELATÓRIO DO RESULTADO DA LICITAÇÃO (depois do pregão)
+// ════════════════════════════════════════════════════════════════════════
+type SituacaoGanho = 'VIAVEL' | 'MARGEM_REDUZIDA' | 'PREJUIZO' | 'SEM_CUSTO';
+const ROTULO_GANHO: Record<SituacaoGanho, string> = { VIAVEL: 'Lucro no alvo', MARGEM_REDUZIDA: 'Lucro abaixo do alvo', PREJUIZO: 'Prejuízo', SEM_CUSTO: 'Sem custo informado' };
+
+export const generateResultadoPdf = (certame: CertameComCalculo, empresa?: ClienteAssessoria | null, opcoes: OpcoesRelatorio = {}) => {
+    const doc = criarPdfTimbrado();
+    const custos = explicarCustos(opcoes.contexto, opcoes.custosDe || empresa?.nomeFantasia || certame.empresaDestinoNome || 'AM Contratos & Soluções B2G');
+    const todos = certame.itens;
+    const ganhos = todos.filter(i => i.status === 'GANHO').sort((a, b) => a.itemNumero - b.itemNumero);
+    const perdidos = todos.filter(i => i.status === 'PERDIDO').sort((a, b) => a.itemNumero - b.itemNumero);
+    const fora = todos.filter(i => i.status === 'NAO_PARTICIPOU').sort((a, b) => a.itemNumero - b.itemNumero);
+    const emDisputa = todos.filter(i => i.status === 'PENDENTE');
+    const participou = todos.length - fora.length;
+
+    const linhas = ganhos.map(i => {
+        const m = i.metrics;
+        const valor = i.precoFinalVendidoReal && i.precoFinalVendidoReal > 0 ? i.precoFinalVendidoReal : m.precoFinalUnit;
+        const ref = !certame.orcamentoSigiloso && i.precoReferencia && i.precoReferencia > 0 ? i.precoReferencia : null;
+        const categoria = opcoes.contexto?.categorias.find(c => c.id === i.categoriaId);
+        const alvo = i.margemManualPct ?? categoria?.margemPadraoPercent ?? 0;
+        const aliq = i.aliquotaPct || 0;
+        const temCusto = i.custoUnitBase > 0 && !m.estimado;
+        const custo = m.custoTotalUnit;
+        const lucroUnit = valor * (1 - aliq / 100) - custo;
+        const margem = valor > 0 ? (lucroUnit / valor) * 100 : 0;
+        const fator = i.custoUnitBase > 0 ? custo / i.custoUnitBase : null;
+        const tetoSemPrejuizo = fator ? (valor * (1 - aliq / 100)) / fator : null;
+        const tetoAlvo = fator && 1 - aliq / 100 - alvo / 100 > 0 ? (valor * (1 - aliq / 100 - alvo / 100)) / fator : null;
+        const situacao: SituacaoGanho = !temCusto ? 'SEM_CUSTO' : lucroUnit < 0 ? 'PREJUIZO' : margem < alvo - 1e-9 ? 'MARGEM_REDUZIDA' : 'VIAVEL';
+        return { i, nome: nomeCurto(i.descricao), valor, ref, desconto: ref ? ((ref - valor) / ref) * 100 : null, total: valor * i.qtd, custo, lucroUnit, lucroTotal: lucroUnit * i.qtd, margem, alvo, situacao, tetoSemPrejuizo, tetoAlvo, temCusto };
+    });
+    const valorAta = linhas.reduce((t, l) => t + l.total, 0);
+    const lucroAta = linhas.filter(l => l.temCusto).reduce((t, l) => t + l.lucroTotal, 0);
+    const refGanhos = linhas.reduce((t, l) => t + (l.ref ?? 0) * l.i.qtd, 0);
+    const margemAta = valorAta > 0 ? (lucroAta / valorAta) * 100 : 0;
+    const descontoMedio = refGanhos > 0 ? ((refGanhos - valorAta) / refGanhos) * 100 : null;
+    const conta = (s: SituacaoGanho) => linhas.filter(l => l.situacao === s);
+
+    let y = tituloRelatorio(doc, 'Relatório do Resultado da Licitação', `${certame.modalidade} ${certame.numeroAno}`, [sessaoLinha(certame), empresaLinha(certame, empresa), emitido()]);
+
+    // 1. Resultado em números
+    y = secao(doc, y, '1. Resultado em números');
+    y = quadros(doc, y, [
+        { rotulo: 'Itens no edital', valor: String(todos.length) },
+        { rotulo: 'Itens disputados', valor: String(participou) },
+        { rotulo: 'Itens ganhos', valor: String(ganhos.length), cor: SITUACAO_CORES.VIAVEL.texto },
+        { rotulo: 'Itens perdidos', valor: String(perdidos.length), cor: perdidos.length ? SITUACAO_CORES.PREJUIZO.texto : undefined },
+        { rotulo: 'Sem participação', valor: String(fora.length) },
+        { rotulo: 'Ainda sem resultado lançado', valor: String(emDisputa.length), cor: emDisputa.length ? SITUACAO_CORES.MARGEM_REDUZIDA.texto : undefined },
+    ], 3);
+    y = quadros(doc, y, [
+        { rotulo: 'Valor da ata (itens ganhos × quantidade)', valor: brl(valorAta), cor: COR_AZUL },
+        { rotulo: 'Lucro previsto se a ata for executada inteira', valor: brl(lucroAta), cor: lucroAta >= 0 ? SITUACAO_CORES.VIAVEL.texto : SITUACAO_CORES.PREJUIZO.texto },
+        { rotulo: 'Margem de lucro sobre a ata', valor: pct(margemAta) },
+    ], 3);
+    const resumo: string[] = [];
+    resumo.push(`Dos ${todos.length} itens do edital, a empresa disputou ${participou} e venceu ${ganhos.length}${perdidos.length ? `, perdendo ${perdidos.length}` : ''}.`);
+    resumo.push(`A ata soma ${brl(valorAta)}${descontoMedio !== null ? `, ${pct(Math.abs(descontoMedio))} ${descontoMedio >= 0 ? 'abaixo' : 'acima'} do valor de referência desses itens (${brl(refGanhos)})` : ''}.`);
+    resumo.push(`Se o órgão pedir todas as quantidades, o lucro previsto é de ${brl(lucroAta)} (${pct(margemAta)} do valor vendido), depois de pagar produtos, frete, despesas, custos do certame e imposto.`);
+    if (conta('PREJUIZO').length) resumo.push(`Atenção: ${conta('PREJUIZO').length} item(ns) ganho(s) dá(ão) prejuízo com os custos atuais (${conta('PREJUIZO').map(l => l.nome).join(', ')}); veja os limites de compra na seção 3.`);
+    if (conta('MARGEM_REDUZIDA').length) resumo.push(`${conta('MARGEM_REDUZIDA').length} item(ns) ficou(aram) com lucro abaixo da margem desejada (${conta('MARGEM_REDUZIDA').map(l => l.nome).join(', ')}).`);
+    if (conta('SEM_CUSTO').length) resumo.push(`${conta('SEM_CUSTO').length} item(ns) ganho(s) está(ão) sem custo de compra informado (${conta('SEM_CUSTO').map(l => l.nome).join(', ')}): o lucro deles não entra no total até a cotação.`);
+    if (emDisputa.length) resumo.push(`${emDisputa.length} item(ns) ainda está(ão) sem resultado lançado no sistema.`);
+    y = destaque(doc, y, 'Resumo', resumo.join(' '), { fundo: [232, 238, 250], texto: COR_AZUL });
+    y = paragrafo(doc, y, 'Em ata de registro de preços o órgão compra conforme a necessidade: o valor da ata é o máximo que pode ser pedido no período, não uma venda garantida. O resultado real depende dos empenhos emitidos.', { tamanho: 8.5 });
+
+    // 2. Itens ganhos
+    y = secao(doc, y, '2. Itens ganhos');
+    if (!linhas.length) {
+        y = paragrafo(doc, y, 'Nenhum item marcado como ganho no sistema. Use "Resultado da disputa" na planilha do certame para lançar os itens ganhos e os valores.');
+    } else {
+        autoTable(doc, {
+            startY: y, margin: MARGEM_TIMBRADO,
+            head: [['Item', 'Produto', 'Qtd', 'Preço ref.', 'Valor ganho', 'Abaixo da ref.', 'Total do item', 'Custo total unit.', 'Lucro total', 'Margem', 'Situação']],
+            body: linhas.map(l => [l.i.itemNumero, l.nome, num(l.i.qtd), l.ref !== null ? brl(l.ref) : '-', brl(l.valor), l.desconto !== null ? pct(l.desconto) : '-', brl(l.total), l.temCusto ? brl(l.custo) : '-', l.temCusto ? brl(l.lucroTotal) : '-', l.temCusto ? pct(l.margem) : '-', ROTULO_GANHO[l.situacao]]),
+            foot: [[{ content: 'Totais', colSpan: 6 }, brl(valorAta), '', brl(lucroAta), pct(margemAta), ''] as any],
+            showFoot: 'lastPage', theme: 'striped',
+            headStyles: { fillColor: COR_AZUL, fontSize: 7.2, valign: 'middle' }, footStyles: { fillColor: [230, 234, 244], textColor: [30, 30, 30], fontStyle: 'bold', fontSize: 7.4 },
+            styles: { fontSize: 7.2, cellPadding: 1.4, halign: 'right', valign: 'middle' },
+            columnStyles: { 0: { halign: 'center', cellWidth: 8 }, 1: { halign: 'left', cellWidth: 28 }, 10: { halign: 'left', cellWidth: 22 } },
+            didParseCell: corSituacao(linhas.map(l => l.situacao), 10),
+        });
+        y = ultimaTabelaY(doc) + 6;
+
+        // 3. Limites de compra
+        y = secao(doc, y, '3. Quanto pode custar cada produto (limite de compra)');
+        y = paragrafo(doc, y, 'Os preços da ata ficam fixos, mas o custo de compra muda com o mercado. A tabela mostra, para cada item ganho, até quanto o produto pode ser comprado do fornecedor: acima do "limite sem prejuízo" o item passa a dar prejuízo; até o "limite para a margem desejada" o lucro fica no alvo. Use antes de cada compra.', { tamanho: 8.8 });
+        autoTable(doc, {
+            startY: y, margin: MARGEM_TIMBRADO,
+            head: [['Item', 'Produto', 'Und', 'Custo de compra atual', 'Limite para a margem desejada', 'Limite sem prejuízo', 'Margem desejada']],
+            body: linhas.map(l => [l.i.itemNumero, l.nome, l.i.unidade, l.temCusto ? brl(l.i.custoUnitBase) : 'não informado', l.tetoAlvo !== null ? brl(l.tetoAlvo) : '-', l.tetoSemPrejuizo !== null ? brl(l.tetoSemPrejuizo) : '-', pct(l.alvo, 0)]),
+            theme: 'grid', headStyles: { fillColor: COR_AZUL, fontSize: 7.6 }, styles: { fontSize: 7.6, cellPadding: 1.4, halign: 'right' },
+            columnStyles: { 0: { halign: 'center', cellWidth: 9 }, 1: { halign: 'left', cellWidth: 34 }, 2: { halign: 'left', cellWidth: 12 } },
+            didParseCell: (d: any) => { if (d.section === 'body' && d.column.index === 3) { const l = linhas[d.row.index]; if (l?.tetoSemPrejuizo !== null && l?.temCusto && l.i.custoUnitBase > (l.tetoSemPrejuizo ?? Infinity)) d.cell.styles.textColor = SITUACAO_CORES.PREJUIZO.texto; } },
+        });
+        y = ultimaTabelaY(doc) + 6;
+
+        const atencao = linhas.filter(l => l.situacao !== 'VIAVEL');
+        if (atencao.length) {
+            y = secao(doc, y, 'Itens que pedem atenção');
+            atencao.forEach(l => {
+                const und = (l.i.unidade || 'un').toLowerCase();
+                let t = '';
+                if (l.situacao === 'SEM_CUSTO') t = `ganho por ${brl(l.valor)} por ${und}, mas sem custo de compra informado. Cotar para saber o lucro${l.tetoSemPrejuizo !== null ? `` : ''}.`;
+                else if (l.situacao === 'PREJUIZO') t = `ganho por ${brl(l.valor)} por ${und}, mas o custo total é ${brl(l.custo)}: prejuízo de ${brl(Math.abs(l.lucroUnit))} por ${und} (${brl(Math.abs(l.lucroTotal))} no total). Só compensa comprando o produto por até ${brl(l.tetoSemPrejuizo)} (hoje ${brl(l.i.custoUnitBase)}).`;
+                else t = `ganho por ${brl(l.valor)} por ${und}, com lucro de ${pct(l.margem)}, abaixo da margem desejada de ${pct(l.alvo, 0)}. Para chegar ao alvo, comprar por até ${brl(l.tetoAlvo)} (hoje ${brl(l.i.custoUnitBase)}).`;
+                y = marcador(doc, y, `**Item ${l.i.itemNumero}, ${l.nome}:** ${t}`, 8.8);
+            });
+        }
+    }
+
+    // 4. Perdidos e não disputados
+    if (perdidos.length || fora.length) {
+        y = secao(doc, y, '4. Itens perdidos e não disputados');
+        if (perdidos.length) y = paragrafo(doc, y, `**Perdidos (${perdidos.length}):** ${perdidos.map(i => `${i.itemNumero}. ${nomeCurto(i.descricao)}`).join('; ')}.`, { tamanho: 8.8 });
+        if (fora.length) y = paragrafo(doc, y, `**Sem participação (${fora.length}):** ${fora.map(i => `${i.itemNumero}. ${nomeCurto(i.descricao)}`).join('; ')}.`, { tamanho: 8.8 });
+        y = paragrafo(doc, y, 'Esses itens ficam fora do valor da ata e não recebem custos do certame (portal, combustível etc.), que passam a ser pagos pelos itens ganhos.', { tamanho: 8.5 });
+    }
+
+    // 5. Como o lucro foi calculado
+    y = secao(doc, y, `${perdidos.length || fora.length ? '5' : '4'}. Como o lucro foi calculado`);
+    y = paragrafo(doc, y, '**Lucro por unidade:** valor ganho - imposto - custo total. O custo total soma o custo de compra do produto, o frete, uma parte das despesas fixas mensais (overhead) e uma parte dos custos desta licitação, divididos entre os itens ganhos na proporção do custo de cada um.', { tamanho: 8.8 });
+    y = paragrafo(doc, y, '**Margem:** lucro ÷ valor ganho. Mostra quanto de cada real recebido do órgão fica de lucro.', { tamanho: 8.8 });
+    if (custos) {
+        const fixos = custos.custosFixos.map(f => `${f.descricao} (${brl(f.valor)}/mês)`).join('; ') || 'nenhuma';
+        const vars = [...custos.custosVariaveisValor.map(v => `${v.descricao} (${brl(v.valor)})`), ...custos.custosVariaveisPct.map(v => `${v.descricao} (${pct(v.valor, 2)})`)].join('; ') || 'nenhum';
+        y = paragrafo(doc, y, `**Custos considerados (${custos.custosDe}):** despesas fixas: ${fixos}, equivalentes a ${pct(custos.overheadPct, 2)} sobre o custo de cada produto; custos da licitação: ${vars}; frete: ${custos.fretePct > 0 ? pct(custos.fretePct) : 'não aplicado separadamente'}.`, { tamanho: 8.8 });
+    }
+
+    // 6. Honorários da assessoria (quando o cliente tem êxito)
+    const tipo = empresa?.vinculo?.tipoVinculo;
+    let n = perdidos.length || fora.length ? 6 : 5;
+    if (empresa && (tipo === 'EXITO' || tipo === 'HIBRIDO') && valorAta > 0) {
+        const ex = tipo === 'EXITO' ? calcularExitoPorFaixa(valorAta) : calcularExitoHibrido(valorAta);
+        y = secao(doc, y, `${n}. Honorários de êxito da assessoria (estimativa)`);
+        y = paragrafo(doc, y, `Pelo contrato de assessoria (${tipo === 'EXITO' ? 'êxito' : 'híbrido'}), os honorários de êxito são cobrados sobre o valor de cada empenho, em escala progressiva. Se todo o valor da ata for empenhado, a estimativa é de ${brl(ex.valorExito)} (${pct(ex.percentual * 100, 2)} efetivo), e o lucro previsto do cliente, já descontados os honorários, fica em ${brl(lucroAta - ex.valorExito)}. O valor efetivo depende dos empenhos emitidos.`, { tamanho: 8.8 });
+        n++;
+    }
+
+    // 7. Próximos passos
+    y = secao(doc, y, `${n}. Próximos passos`);
+    [
+        'Assinar a ata de registro de preços (ou o contrato) no prazo do edital e conferir se os valores e as quantidades conferem com este relatório.',
+        'Manter as certidões de regularidade válidas durante toda a vigência: o órgão confere antes de cada pagamento.',
+        'A cada empenho recebido, cotar os produtos e comprar dentro dos limites da seção 3; registrar a compra no sistema para acompanhar o lucro real.',
+        'Entregar no prazo do empenho e emitir a nota fiscal de cada entrega; acompanhar o atesto e o pagamento.',
+    ].forEach(t => { y = marcador(doc, y, t, 8.8); });
+
+    assinaturaAm(doc, y);
+    numerarPaginas(doc);
+    doc.save(nomeArquivo('relatorio_resultado', certame));
 };
